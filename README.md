@@ -38,7 +38,20 @@ deno run --allow-net --allow-env --allow-read src/main.ts
 | `SPOTIFY_CLIENT_SECRET` | Spotify API クライアントシークレット | 必須                             |
 | `PORT`                  | サーバーのポート番号                 | 8081                             |
 | `REDIRECT_URI`          | OAuth リダイレクト URI               | http://127.0.0.1:{PORT}/callback |
-| `POLLING_INTERVAL`      | 楽曲情報の更新間隔（ミリ秒）         | 3000                             |
+| `POLLING_INTERVAL`      | 楽曲情報の更新間隔（ミリ秒）         | 10000 (推奨: 10000-15000)        |
+
+## レート制限対策
+
+このアプリケーションには以下のレート制限対策が実装されています：
+
+- **API呼び出し制限**: 1分間に最大30回のSpotify APIコール
+- **変更検知**: 楽曲が変わった場合のみクライアントに通知
+- **キャッシュ機能**: レート制限時は前回の結果を返す
+- **429エラー処理**: Spotifyからのレート制限レスポンスを適切に処理
+
+推奨設定:
+- `POLLING_INTERVAL`: 10000-15000ms (10-15秒間隔)
+- これにより1時間あたり240-360回のAPI呼び出しに制限され、Spotifyのレート制限内に収まります
 
 ## 使用方法
 

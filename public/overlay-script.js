@@ -29,7 +29,7 @@ ws.onerror = function (error) {
 };
 
 function updateTrackInfo(data) {
-  if (!data.trackName || !data.artistName) {
+  if (!data || !data.trackName || !data.artistName) {
     showNoTrack();
     return;
   }
@@ -44,8 +44,17 @@ function updateTrackInfo(data) {
     currentTrack = newTrackId;
   }
 
-  trackNameElement.textContent = data.trackName;
+  // 再生状態によって表示を調整
+  const playingIndicator = data.isPlaying ? "♪ " : "⏸ ";
+  trackNameElement.textContent = playingIndicator + data.trackName;
   artistNameElement.textContent = data.artistName;
+  
+  // 再生状態によってスタイルを変更
+  if (data.isPlaying) {
+    containerElement.classList.remove("paused");
+  } else {
+    containerElement.classList.add("paused");
+  }
 
   containerElement.classList.remove("no-track");
 }

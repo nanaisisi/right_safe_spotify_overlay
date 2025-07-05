@@ -12,6 +12,9 @@ let refreshToken: string | null = null;
 let tokenExpiresAt: number | null = null;
 
 const connectedClients = new Set<WebSocket>();
+let lastTrackInfo: any = null;
+let apiCallCount = 0;
+let apiCallResetTime = Date.now() + 60000; // Reset API call counter every minute
 
 async function refreshAccessToken() {
     if (!refreshToken) {
@@ -51,10 +54,23 @@ async function getCurrentlyPlaying() {
         return null;
     }
 
+    // Rate limiting check - max 30 calls per minute
+    const now = Date.now();
+    if (now > apiCallResetTime) {
+        apiCallCount = 0;
+        apiCallResetTime = now + 60000;
+    }
+    
+    if (apiCallCount >= 30) {
+        console.log("API rate limit reached, skipping request");
+        return lastTrackInfo; // Return cached info
+    }
+
     if (tokenExpiresAt && Date.now() >= tokenExpiresAt) {
         await refreshAccessToken();
     }
 
+    apiCallCount++;
     const res = await fetch("https://api.spotify.com/v1/me/player/currently-playing", {
         headers: {
             "Authorization": `Bearer ${accessToken}`,
@@ -63,6 +79,7 @@ async function getCurrentlyPlaying() {
 
     if (res.status === 204) {
         // No content, nothing is playing
+        lastTrackInfo = null;
         return null;
     }
     if (res.status === 401) {
@@ -70,33 +87,55 @@ async function getCurrentlyPlaying() {
         await refreshAccessToken();
         return getCurrentlyPlaying(); // Retry after refreshing
     }
+    if (res.status === 429) {
+        // Rate limited by Spotify
+        const retryAfter = res.headers.get("Retry-After");
+        console.log(`Rate limited by Spotify. Retry after: ${retryAfter} seconds`);
+        return lastTrackInfo; // Return cached info
+    }
     if (!res.ok) {
         const body = await res.text();
         console.error(`Error fetching currently playing: ${body}`);
-        return null;
+        return lastTrackInfo; // Return cached info on error
     }
 
     const data = await res.json();
     if (!data.item) {
+        lastTrackInfo = null;
         return null;
     }
 
-    return {
+    const trackInfo = {
         trackName: data.item.name,
         artistName: data.item.artists.map((artist: any) => artist.name).join(", "),
+        isPlaying: data.is_playing,
+        progressMs: data.progress_ms,
+        durationMs: data.item.duration_ms,
     };
+
+    lastTrackInfo = trackInfo;
+    return trackInfo;
 }
 
 // Periodically fetch currently playing song and broadcast to clients
+let lastBroadcastTrack: any = null;
+
 setInterval(async () => {
     const nowPlaying = await getCurrentlyPlaying();
-    if (nowPlaying) {
+    
+    // Only broadcast if track changed or if it's the first time
+    const currentTrackId = nowPlaying ? `${nowPlaying.trackName}-${nowPlaying.artistName}-${nowPlaying.isPlaying}` : null;
+    const lastTrackId = lastBroadcastTrack ? `${lastBroadcastTrack.trackName}-${lastBroadcastTrack.artistName}-${lastBroadcastTrack.isPlaying}` : null;
+    
+    if (currentTrackId !== lastTrackId) {
         const message = JSON.stringify(nowPlaying);
         for (const client of connectedClients) {
             if (client.readyState === WebSocket.OPEN) {
                 client.send(message);
             }
         }
+        lastBroadcastTrack = nowPlaying;
+        console.log(`Track updated: ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'}`);
     }
 }, config.pollingInterval); // Use configuration for polling interval
 

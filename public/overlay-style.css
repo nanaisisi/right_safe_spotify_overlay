@@ -86,3 +86,16 @@ body {
 .no-track #artist-name {
   color: #999999;
 }
+
+/* 一時停止状態のスタイル */
+.paused {
+  opacity: 0.7;
+}
+
+.paused #track-name {
+  color: #ffa500 !important;
+}
+
+.paused #artist-name {
+  color: #cccccc !important;
+}
