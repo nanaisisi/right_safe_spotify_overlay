@@ -168,6 +168,25 @@ serve(async (req) => {
         return response;
     }
 
+    if (url.pathname === "/favicon.ico") {
+        // Return a simple 16x16 transparent PNG favicon
+        const favicon = new Uint8Array([
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+            0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x10,
+            0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0xf3, 0xff, 0x61, 0x00, 0x00, 0x00,
+            0x0b, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+            0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+            0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
+        ]);
+        
+        return new Response(favicon, {
+            headers: {
+                "Content-Type": "image/png",
+                "Cache-Control": "public, max-age=86400"
+            }
+        });
+    }
+
     return serveDir(req, {
         fsRoot: "public",
         urlRoot: "",
@@ -175,3 +194,10 @@ serve(async (req) => {
         enableCors: true,
     });
 }, { port: config.port });
+
+console.log(`Spotify Overlay Server is running on:`);
+console.log(`  - Local:   http://127.0.0.1:${config.port}/`);
+console.log(`  - Network: http://localhost:${config.port}/`);
+console.log(`\nTo get started:`);
+console.log(`  1. Open http://127.0.0.1:${config.port}/ in your browser`);
+console.log(`  2. Go to http://127.0.0.1:${config.port}/login to authenticate with Spotify`);

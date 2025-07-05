@@ -1,17 +1,71 @@
 body {
-    background-color: transparent;
-    color: white;
-    font-family: sans-serif;
-    text-align: center;
+  background-color: transparent;
+  color: white;
+  font-family: sans-serif;
+  text-align: center;
 }
 
 #container {
-    display: inline-block;
-    background-color: rgba(0, 0, 0, 0.5);
-    padding: 10px 20px;
-    border-radius: 5px;
+  display: inline-block;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 10px 20px;
+  border-radius: 5px;
 }
 
 #track-info p {
-    margin: 5px 0;
+  margin: 5px 0;
+}
+
+#controls {
+  margin-top: 15px;
+}
+
+#login-link {
+  display: inline-block;
+  background-color: #1db954;
+  color: white;
+  text-decoration: none;
+  padding: 10px 20px;
+  border-radius: 25px;
+  font-weight: bold;
+  transition: background-color 0.3s;
+  margin-bottom: 15px;
+}
+
+#login-link:hover {
+  background-color: #1ed760;
+}
+
+#server-info {
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 10px;
+  border-radius: 5px;
+  margin-top: 10px;
+}
+
+#server-info p {
+  margin: 5px 0;
+  font-size: 14px;
+  color: #ccc;
+}
+
+#server-info ul {
+  list-style: none;
+  padding: 0;
+  margin: 5px 0;
+}
+
+#server-info li {
+  margin: 3px 0;
+}
+
+#server-info a {
+  color: #1db954;
+  text-decoration: none;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+#server-info a:hover {
+  text-decoration: underline;
 }

@@ -27,7 +27,7 @@ POLLING_INTERVAL=3000
 ### 3. 実行
 
 ```bash
-deno run --allow-net --allow-env src/main.ts
+deno run --allow-net --allow-env --allow-read src/main.ts
 ```
 
 ## 設定可能な環境変数

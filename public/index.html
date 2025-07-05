@@ -1,19 +1,36 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Spotify Now Playing</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
     <div id="container">
-        <div id="track-info">
-            <p id="track-name"></p>
-            <p id="artist-name"></p>
-        </div>
+      <div id="track-info">
+        <p id="track-name"></p>
+        <p id="artist-name"></p>
+      </div>
+      <div id="controls">
         <a href="/login" id="login-link">Login with Spotify</a>
+        <div id="server-info">
+          <p>Server running on:</p>
+          <ul>
+            <li>
+              <a href="http://127.0.0.1:8081/" target="_blank"
+                >http://127.0.0.1:8081/</a
+              >
+            </li>
+            <li>
+              <a href="http://localhost:8081/" target="_blank"
+                >http://localhost:8081/</a
+              >
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
     <script src="script.js"></script>
-</body>
+  </body>
 </html>
