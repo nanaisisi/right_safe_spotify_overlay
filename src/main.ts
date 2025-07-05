@@ -117,10 +117,15 @@ async function getCurrentlyPlaying() {
     return trackInfo;
 }
 
-// Periodically fetch currently playing song and broadcast to clients
+// Adaptive polling system for currently playing song
 let lastBroadcastTrack: any = null;
+let lastTrackChangeTime = Date.now();
+let consecutiveNoChanges = 0;
+let currentPollingInterval = 10000; // Start with 10 seconds
+const shortInterval = 10000; // 10 seconds for frequent checks
+const longInterval = 60000;  // 60 seconds for infrequent checks
 
-setInterval(async () => {
+async function checkAndBroadcastTrack() {
     const nowPlaying = await getCurrentlyPlaying();
     
     // Only broadcast if track changed or if it's the first time
@@ -128,6 +133,7 @@ setInterval(async () => {
     const lastTrackId = lastBroadcastTrack ? `${lastBroadcastTrack.trackName}-${lastBroadcastTrack.artistName}-${lastBroadcastTrack.isPlaying}` : null;
     
     if (currentTrackId !== lastTrackId) {
+        // Track changed - broadcast and reset polling to frequent mode
         const message = JSON.stringify(nowPlaying);
         for (const client of connectedClients) {
             if (client.readyState === WebSocket.OPEN) {
@@ -135,9 +141,28 @@ setInterval(async () => {
             }
         }
         lastBroadcastTrack = nowPlaying;
-        console.log(`Track updated: ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'}`);
+        lastTrackChangeTime = Date.now();
+        consecutiveNoChanges = 0;
+        currentPollingInterval = shortInterval;
+        console.log(`Track updated: ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (polling: ${currentPollingInterval}ms)`);
+    } else {
+        // No change detected
+        consecutiveNoChanges++;
+        const timeSinceLastChange = Date.now() - lastTrackChangeTime;
+        
+        // If no changes for more than 30 seconds, switch to long interval
+        if (timeSinceLastChange > 30000 && currentPollingInterval === shortInterval) {
+            currentPollingInterval = longInterval;
+            console.log(`Switching to long polling interval (${longInterval}ms) - no track changes for ${Math.round(timeSinceLastChange / 1000)}s`);
+        }
     }
-}, config.pollingInterval); // Use configuration for polling interval
+    
+    // Schedule next check with current interval
+    setTimeout(checkAndBroadcastTrack, currentPollingInterval);
+}
+
+// Start the adaptive polling
+setTimeout(checkAndBroadcastTrack, 1000); // Start after 1 second
 
 
 serve(async (req) => {
@@ -193,6 +218,12 @@ serve(async (req) => {
         socket.onopen = () => {
             console.log("WebSocket connection opened");
             connectedClients.add(socket);
+            
+            // Send current track info immediately to new client
+            if (lastBroadcastTrack && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify(lastBroadcastTrack));
+                console.log("Sent current track info to new client");
+            }
         };
 
         socket.onclose = () => {

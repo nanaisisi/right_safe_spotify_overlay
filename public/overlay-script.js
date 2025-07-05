@@ -48,7 +48,7 @@ function updateTrackInfo(data) {
   const playingIndicator = data.isPlaying ? "♪ " : "⏸ ";
   trackNameElement.textContent = playingIndicator + data.trackName;
   artistNameElement.textContent = data.artistName;
-  
+
   // 再生状態によってスタイルを変更
   if (data.isPlaying) {
     containerElement.classList.remove("paused");
