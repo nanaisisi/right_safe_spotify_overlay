@@ -1,0 +1,17 @@
+body {
+    background-color: transparent;
+    color: white;
+    font-family: sans-serif;
+    text-align: center;
+}
+
+#container {
+    display: inline-block;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 10px 20px;
+    border-radius: 5px;
+}
+
+#track-info p {
+    margin: 5px 0;
+}
