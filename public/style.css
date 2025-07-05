@@ -23,7 +23,7 @@ body {
 #track-info p:first-child {
   font-size: 18px;
   font-weight: bold;
-  color: #1DB954;
+  color: #1db954;
 }
 
 #track-info p:last-child {
@@ -101,7 +101,7 @@ body {
 
 .obs-link {
   display: block;
-  background-color: #1DB954;
+  background-color: #1db954;
   color: white !important;
   text-decoration: none;
   padding: 8px 15px;
