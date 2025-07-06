@@ -30,6 +30,13 @@ POLLING_INTERVAL=3000
 deno run --allow-net --allow-env --allow-read src/main.ts
 ```
 
+## 使用方法
+
+1. アプリケーションを起動
+2. ブラウザで `http://127.0.0.1:8081` にアクセス
+3. `/login` エンドポイントで Spotify にログイン
+4. WebSocket を使用してリアルタイムで現在再生中の楽曲情報を取得
+
 ## 設定可能な環境変数
 
 | 変数名                  | 説明                                 | デフォルト値                     |
@@ -71,9 +78,14 @@ deno run --allow-net --allow-env --allow-read src/main.ts
 - 適応的ポーリングが自動で最適化するため、特別な設定は不要
 - 通常の使用では 1 時間あたり 60-120 回の API 呼び出しで済みます
 
-## 使用方法
+## ライセンス
 
-1. アプリケーションを起動
-2. ブラウザで `http://127.0.0.1:8081` にアクセス
-3. `/login` エンドポイントで Spotify にログイン
-4. WebSocket を使用してリアルタイムで現在再生中の楽曲情報を取得
+## 本ソフトウェア
+
+デュアルライセンスからライセンスを選択してご使用ください。
+
+Licensed under either of
+
+Apache License, Version 2.0, (LICENSE-APACHE or
+https://www.apache.org/licenses/LICENSE-2.0) MIT license (LICENSE-MIT or
+https://opensource.org/licenses/MIT) at your option.
