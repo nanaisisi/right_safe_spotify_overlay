@@ -1,6 +1,15 @@
-# Media Overlay Application
+# Media Overlay Application (Windows 専用)
 
 Spotify または VLC Media Player で現在再生中の楽曲を表示する Web アプリケーションです。
+
+> **⚠️ 注意**: このアプリケーションは Windows 環境専用です。ヘルパースクリプト（`.bat`ファイル）やパス設定が Windows 用に最適化されています。
+
+## 動作環境
+
+- **OS**: Windows 10/11
+- **ランタイム**: Deno (最新版推奨)
+- **ブラウザ**: Chrome, Firefox, Edge など現代的な Web ブラウザ
+- **VLC**: VLC Media Player 3.x 以降（VLC モード使用時）
 
 ## セットアップ
 
@@ -77,18 +86,28 @@ vlc --intf http --http-password vlc --http-port 8080
 2. リンク先に以下を追加： `--intf http --http-password vlc --http-port 8080`
 3. 例：`"C:\Program Files\VideoLAN\VLC\vlc.exe" --intf http --http-password vlc --http-port 8080`
 
-**便利なバッチファイル:**
+**便利なバッチファイル (Windows 専用):**
 
 このプロジェクトには `start-vlc-with-web.bat` が含まれています。これを実行すると、Web インターフェースが有効な状態で VLC が起動します。
+
+> **📝 Linux/macOS**: バッチファイルの代わりに、上記のコマンドライン起動方法をシェルスクリプトとして作成してください。
 
 ### 2. 設定ファイル
 
 #### TOML 設定ファイル（推奨）
 
-`config.toml.example` ファイルをコピーして `config.toml` ファイルを作成し、適切な値を設定してください：
+`config_example.toml` ファイルをコピーして `config.toml` ファイルを作成し、適切な値を設定してください：
+
+**Windows:**
+
+```cmd
+copy config_example.toml config.toml
+```
+
+**Linux/macOS:**
 
 ```bash
-cp config.toml.example config.toml
+cp config_example.toml config.toml
 ```
 
 **Spotify モードの場合:**
@@ -97,7 +116,6 @@ cp config.toml.example config.toml
 [server]
 port = 8081
 redirect_uri = "http://127.0.0.1:8081/callback"
-polling_interval = 5000
 
 [spotify]
 client_id = "あなたのSpotifyクライアントID"
@@ -112,7 +130,7 @@ enabled = false
 ```toml
 [server]
 port = 8081
-polling_interval = 5000
+redirect_uri = "http://127.0.0.1:8081/callback"
 
 [spotify]
 client_id = ""
@@ -126,63 +144,40 @@ password = "your_secure_password"
 exe_path = "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"
 auto_start = false
 show_gui = true
+
+[polling]
+# VLC用ポーリング間隔（ローカルAPIなので高頻度）
+vlc_short_interval = 5000      # VLC短間隔ポーリング (5秒)
+vlc_long_interval = 10000      # VLC長間隔ポーリング (10秒)
+
+# Spotify用ポーリング間隔（API制限を考慮して低頻度）
+spotify_short_interval = 10000 # Spotify短間隔ポーリング (10秒)
+spotify_long_interval = 30000  # Spotify長間隔ポーリング (30秒)
 ```
 
-#### .env 設定ファイル（フォールバック）
+#### 設定ファイルの準備
 
-TOML ファイルが見つからない場合、従来の`.env`ファイルも使用できます。
+上記の設定例を参考に、あなたの環境に合わせて設定値を更新してください。
 
-#### VLC モードの場合：
-
-```bash
-# VLC 設定
-VLC_ENABLED=true
-VLC_HOST=localhost
-VLC_PORT=8080
-VLC_PASSWORD=vlc
-
-# VLC 自動起動設定（オプション）
-VLC_EXE_PATH=C:\Program Files\VideoLAN\VLC\vlc.exe
-VLC_AUTO_START=true
-
-# サーバー設定
-PORT=8081
-POLLING_INTERVAL=10000
-
-# Spotify設定（VLCモードでは不要）
-SPOTIFY_CLIENT_ID=
-SPOTIFY_CLIENT_SECRET=
-```
-
-**VLC 自動起動機能（非推奨）:**
-
-`VLC_AUTO_START=true` を設定すると、アプリケーション起動時に自動的に VLC が起動されますが、以下の問題があるため推奨しません：
-
-- アプリケーション終了時に VLC も一緒に終了してしまう
-- 既存のプレイリストが消える
-- VLC の設定が初期化される
-
-**推奨する使用方法:**
-
-1. VLC を手動で起動
-2. VLC 設定: ツール > 設定 > インターフェース > メインインターフェース > Web にチェック
-3. VLC 設定: インターフェース > Lua > Lua HTTP > パスワードを設定
-4. VLC を再起動
-5. アプリケーションを起動
+> **💡 ヒント**: Windows でファイルをコピーした後、メモ帳や VS Code などで`config.toml`を編集してください。
 
 ### 3. 実行
 
 **通常の実行:**
 
 ```bash
-deno run --allow-net --allow-env --allow-read --allow-run src/main.ts
+deno run --allow-net --allow-read --allow-run src/main.ts
 ```
 
-**便利なバッチファイル:**
+**便利なバッチファイル (Windows 専用):**
 
-- `start-spotify.bat` - Spotify モードで起動
-- `start-vlc.bat` - VLC モード（手動設定）で起動
-- `start-vlc-auto.bat` - VLC モード（自動起動）で起動
+プロジェクトには以下のヘルパースクリプトが含まれています：
+
+- `scripts/start-vlc-gui.bat` - VLC を GUI モードで起動
+- `scripts/start-vlc-with-web.bat` - VLC を Web インターフェース有効で起動
+- `scripts/vlc-setup-helper.bat` - VLC 設定のヘルプ表示
+
+> **📝 他の OS**: Linux/macOS をご利用の場合は、上記のバッチファイルを参考にシェルスクリプト（`.sh`）を作成してください。
 
 ## 使用方法
 
@@ -200,64 +195,131 @@ deno run --allow-net --allow-env --allow-read --allow-run src/main.ts
 3. ブラウザで `http://127.0.0.1:8081` にアクセス
 4. 自動的に VLC の再生情報を取得・表示
 
-## 設定可能な環境変数
+## 設定オプション
 
-### 共通設定
+### 基本設定
 
-| 変数名             | 説明                         | デフォルト値 |
-| ------------------ | ---------------------------- | ------------ |
-| `PORT`             | サーバーのポート番号         | 8081         |
-| `POLLING_INTERVAL` | 楽曲情報の更新間隔（ミリ秒） | 10000        |
+| 設定項目              | 説明                   | デフォルト値                   |
+| --------------------- | ---------------------- | ------------------------------ |
+| `server.port`         | サーバーのポート番号   | 8081                           |
+| `server.redirect_uri` | OAuth リダイレクト URI | http://127.0.0.1:8081/callback |
 
-### Spotify モード設定
+### Spotify 設定
 
-| 変数名                  | 説明                                 | デフォルト値                     |
-| ----------------------- | ------------------------------------ | -------------------------------- |
-| `SPOTIFY_CLIENT_ID`     | Spotify API クライアント ID          | 必須                             |
-| `SPOTIFY_CLIENT_SECRET` | Spotify API クライアントシークレット | 必須                             |
-| `REDIRECT_URI`          | OAuth リダイレクト URI               | http://127.0.0.1:{PORT}/callback |
+| 設定項目                | 説明                                 | デフォルト値 |
+| ----------------------- | ------------------------------------ | ------------ |
+| `spotify.client_id`     | Spotify API クライアント ID          | 必須         |
+| `spotify.client_secret` | Spotify API クライアントシークレット | 必須         |
 
-### VLC モード設定
+### VLC 設定
 
-| 変数名             | 説明                                 | デフォルト値                     |
-| ------------------ | ------------------------------------ | -------------------------------- |
-| `VLC_ENABLED`      | VLC モードの有効化                   | false                            |
-| `VLC_HOST`         | VLC Web インターフェースのホスト     | localhost                        |
-| `VLC_PORT`         | VLC Web インターフェースのポート     | 8080                             |
-| `VLC_PASSWORD`     | VLC Web インターフェースのパスワード | vlc                              |
-| `REDIRECT_URI`     | OAuth リダイレクト URI               | http://127.0.0.1:{PORT}/callback |
-| `POLLING_INTERVAL` | 楽曲情報の更新間隔（ミリ秒）         | 10000 (推奨: 10000-15000)        |
+| 設定項目         | 説明                                 | デフォルト値                              |
+| ---------------- | ------------------------------------ | ----------------------------------------- |
+| `vlc.enabled`    | VLC モードの有効化                   | false                                     |
+| `vlc.host`       | VLC Web インターフェースのホスト     | 127.0.0.1                                 |
+| `vlc.port`       | VLC Web インターフェースのポート     | 8080                                      |
+| `vlc.password`   | VLC Web インターフェースのパスワード | 必須                                      |
+| `vlc.exe_path`   | VLC 実行ファイルのパス (Windows)     | C:\\Program Files\\VideoLAN\\VLC\\vlc.exe |
+| `vlc.auto_start` | VLC 自動起動（非推奨）               | false                                     |
+| `vlc.show_gui`   | VLC GUI 表示                         | true                                      |
+
+### ポーリング設定
+
+| 設定項目                         | 説明                                       | デフォルト値 |
+| -------------------------------- | ------------------------------------------ | ------------ |
+| `polling.vlc_short_interval`     | VLC 短間隔ポーリング（ミリ秒）             | 5000         |
+| `polling.vlc_long_interval`      | VLC 長間隔ポーリング（ミリ秒）             | 10000        |
+| `polling.spotify_short_interval` | Spotify 短間隔ポーリング（ミリ秒）         | 10000        |
+| `polling.spotify_long_interval`  | Spotify 長間隔ポーリング（ミリ秒）         | 30000        |
+| `polling.long_polling_threshold` | 長間隔ポーリングに切り替える時間（ミリ秒） | 30000        |
 
 ## 適応的ポーリングシステム
 
 このアプリケーションは効率的な適応的ポーリングシステムを使用しています：
 
+### ソース別ポーリング間隔
+
+**VLC モード（ローカル API）:**
+
+- **短間隔**: 5 秒間隔（楽曲変更検出時）
+- **長間隔**: 10 秒間隔（30 秒間変更がない場合）
+
+**Spotify モード（Web API）:**
+
+- **短間隔**: 10 秒間隔（楽曲変更検出時）
+- **長間隔**: 30 秒間隔（30 秒間変更がない場合）
+
 ### ポーリング間隔の自動調整
 
-- **アクティブモード**: 楽曲変更後の 10 秒間隔
-- **アイドルモード**: 30 秒間変更がない場合、60 秒間隔に切り替え
-- **リアルタイム復帰**: 楽曲が変わると即座に 10 秒間隔に戻る
+- **アクティブモード**: 楽曲変更後は短間隔で高レスポンス
+- **アイドルモード**: 30 秒間変更がない場合、長間隔に切り替えて効率化
+- **リアルタイム復帰**: 楽曲が変わると即座に短間隔に戻る
+- **ソース切り替え対応**: VLC⇔Spotify フォールバック時も適切な間隔を使用
 
 ### 利点
 
-- **レスポンシブ**: 楽曲変更時は素早く検出
-- **効率的**: 変更がない時は API 呼び出しを大幅削減
-- **レート制限対応**: 1 時間あたり最大 360 回の API 呼び出し（通常は 60-120 回）
+- **レスポンシブ**: 楽曲変更時は素早く検出（VLC:5 秒、Spotify:10 秒）
+- **効率的**: 変更がない時は API 呼び出しを削減
+- **レート制限対応**: Spotify API 制限を考慮した設計
+- **VLC 最適化**: ローカル API なので高頻度ポーリングが可能
 
 ## レート制限対策
 
 このアプリケーションには以下のレート制限対策が実装されています：
 
+### Spotify API 制限対応
+
 - **API 呼び出し制限**: 1 分間に最大 30 回の Spotify API コール
-- **適応的ポーリング**: 楽曲変更頻度に応じた間隔調整
+- **適応的ポーリング**: Spotify 使用時は 10 秒/30 秒間隔で効率化
 - **変更検知**: 楽曲が変わった場合のみクライアントに通知
 - **キャッシュ機能**: レート制限時は前回の結果を返す
 - **429 エラー処理**: Spotify からのレート制限レスポンスを適切に処理
 
-推奨設定:
+### VLC 最適化
+
+- **高速ポーリング**: ローカル API なので 5 秒/10 秒間隔で高レスポンス
+- **フォールバック機能**: VLC 停止時は自動的に Spotify に切り替え
+- **接続エラー処理**: VLC 接続失敗時の適切なエラーハンドリング
+
+### 推奨設定
 
 - 適応的ポーリングが自動で最適化するため、特別な設定は不要
-- 通常の使用では 1 時間あたり 60-120 回の API 呼び出しで済みます
+- VLC 使用時: 1 時間あたり約 360-720 回のローカル API 呼び出し
+- Spotify 使用時: 1 時間あたり 120-360 回の API 呼び出しで、制限内に収まります
+
+## プロジェクト構造
+
+```
+src/
+├── main.ts                    # メインサーバー
+├── auth/
+│   └── spotify-auth.ts        # Spotify認証管理
+├── media/
+│   ├── spotify-player.ts      # Spotify再生情報取得
+│   ├── vlc-player.ts          # VLC再生情報取得
+│   └── unified-player.ts      # 統合再生情報管理
+├── vlc/
+│   └── vlc-process.ts         # VLCプロセス管理
+├── websocket/
+│   └── websocket-handler.ts   # WebSocket接続・ポーリング管理
+└── utils/
+    └── helpers.ts             # ユーティリティ関数
+
+scripts/                       # Windows専用ヘルパースクリプト
+├── start-vlc-gui.bat         # VLC GUI起動 (Windows)
+├── start-vlc-with-web.bat    # VLC Web起動 (Windows)
+└── vlc-setup-helper.bat      # VLC設定ヘルプ (Windows)
+
+public/                        # 静的ファイル
+├── index.html                # メインページ
+├── script.js                 # クライアントJavaScript
+├── style.css                 # スタイルシート
+├── overlay.html              # オーバーレイページ
+├── overlay-script.js         # オーバーレイJavaScript
+└── overlay-style.css         # オーバーレイスタイル
+
+config_example.toml            # 設定ファイルテンプレート
+```
 
 ## ライセンス
 
