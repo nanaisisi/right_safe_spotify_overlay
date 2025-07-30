@@ -81,23 +81,56 @@ vlc --intf http --http-password vlc --http-port 8080
 
 このプロジェクトには `start-vlc-with-web.bat` が含まれています。これを実行すると、Web インターフェースが有効な状態で VLC が起動します。
 
-### 2. 環境変数の設定
+### 2. 設定ファイル
 
-`.env.example` ファイルをコピーして `.env` ファイルを作成し、適切な値を設定してください：
+#### TOML 設定ファイル（推奨）
 
-#### Spotify モードの場合：
+`config.toml.example` ファイルをコピーして `config.toml` ファイルを作成し、適切な値を設定してください：
 
 ```bash
-# Spotify 設定
-SPOTIFY_CLIENT_ID=あなたのSpotifyクライアントID
-SPOTIFY_CLIENT_SECRET=あなたのSpotifyクライアントシークレット
-VLC_ENABLED=false
-
-# サーバー設定
-PORT=8081
-REDIRECT_URI=http://127.0.0.1:8081/callback
-POLLING_INTERVAL=10000
+cp config.toml.example config.toml
 ```
+
+**Spotify モードの場合:**
+
+```toml
+[server]
+port = 8081
+redirect_uri = "http://127.0.0.1:8081/callback"
+polling_interval = 5000
+
+[spotify]
+client_id = "あなたのSpotifyクライアントID"
+client_secret = "あなたのSpotifyクライアントシークレット"
+
+[vlc]
+enabled = false
+```
+
+**VLC モードの場合:**
+
+```toml
+[server]
+port = 8081
+polling_interval = 5000
+
+[spotify]
+client_id = ""
+client_secret = ""
+
+[vlc]
+enabled = true
+host = "127.0.0.1"
+port = 8080
+password = "doragon"
+exe_path = "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"
+auto_start = false
+show_gui = true
+```
+
+#### .env 設定ファイル（フォールバック）
+
+TOML ファイルが見つからない場合、従来の`.env`ファイルも使用できます。
 
 #### VLC モードの場合：
 
@@ -121,15 +154,21 @@ SPOTIFY_CLIENT_ID=
 SPOTIFY_CLIENT_SECRET=
 ```
 
-**VLC 自動起動機能:**
+**VLC 自動起動機能（非推奨）:**
 
-`VLC_AUTO_START=true` を設定すると、アプリケーション起動時に自動的に VLC が以下のコマンドで起動されます：
+`VLC_AUTO_START=true` を設定すると、アプリケーション起動時に自動的に VLC が起動されますが、以下の問題があるため推奨しません：
 
-```bash
-vlc --intf http --http-password [設定したパスワード] --http-port [設定したポート] --http-host [設定したホスト]
-```
+- アプリケーション終了時に VLC も一緒に終了してしまう
+- 既存のプレイリストが消える
+- VLC の設定が初期化される
 
-この機能により、VLC の Web インターフェースを手動で設定する必要がなくなります。
+**推奨する使用方法:**
+
+1. VLC を手動で起動
+2. VLC 設定: ツール > 設定 > インターフェース > メインインターフェース > Web にチェック
+3. VLC 設定: インターフェース > Lua > Lua HTTP > パスワードを設定
+4. VLC を再起動
+5. アプリケーションを起動
 
 ### 3. 実行
 

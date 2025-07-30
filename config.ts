@@ -1,4 +1,5 @@
 // Configuration file for the Spotify overlay application
+import { parse as parseToml } from "https://deno.land/std@0.213.0/toml/mod.ts";
 
 export interface Config {
     clientId: string;
@@ -13,6 +14,7 @@ export interface Config {
     vlcPassword: string;
     vlcExePath: string;
     vlcAutoStart: boolean;
+    vlcShowGui: boolean;
 }
 
 // Simple .env file parser
@@ -35,47 +37,79 @@ function parseEnvFile(content: string): Record<string, string> {
     return env;
 }
 
-// Load configuration from environment variables with fallback defaults
+// Load configuration from TOML file with fallback to environment variables
 export function loadConfig(): Config {
-    let envVars: Record<string, string> = {};
+    let configData: any = {};
     
-    // Try to load .env file
+    // Try to load config.toml file first, fallback to config_example.toml
     try {
-        const envContent = Deno.readTextFileSync('.env');
-        envVars = parseEnvFile(envContent);
-        // Set environment variables from .env file
-        for (const [key, value] of Object.entries(envVars)) {
-            Deno.env.set(key, value);
-        }
+        const tomlContent = Deno.readTextFileSync('config.toml');
+        configData = parseToml(tomlContent);
+        console.log("✓ Loaded configuration from config.toml");
     } catch (error) {
-        // .env file might not exist, which is okay
-        console.log("No .env file found, using system environment variables or defaults");
+        console.log("No config.toml found, trying config_example.toml...");
+        
+        try {
+            const tomlContent = Deno.readTextFileSync('config_example.toml');
+            configData = parseToml(tomlContent);
+            console.log("✓ Loaded configuration from config_example.toml");
+        } catch (exampleError) {
+            console.log("No TOML configuration found, trying .env file...");
+            
+            // Fallback to .env file
+            try {
+                const envContent = Deno.readTextFileSync('.env');
+                const envVars = parseEnvFile(envContent);
+                // Set environment variables from .env file
+                for (const [key, value] of Object.entries(envVars)) {
+                    Deno.env.set(key, value);
+                }
+                console.log("✓ Loaded configuration from .env file");
+            } catch (envError) {
+                console.log("No .env file found, using system environment variables or defaults");
+            }
+        }
     }
     
-    const port = parseInt(Deno.env.get("PORT") || "8081");
+    // Extract values from TOML or use environment variables as fallback
+    const port = configData.server?.port || parseInt(Deno.env.get("PORT") || "8081");
     
     return {
-        clientId: Deno.env.get("SPOTIFY_CLIENT_ID") || "",
-        clientSecret: Deno.env.get("SPOTIFY_CLIENT_SECRET") || "",
-        redirectUri: Deno.env.get("REDIRECT_URI") || `http://127.0.0.1:${port}/callback`,
+        clientId: configData.spotify?.client_id || Deno.env.get("SPOTIFY_CLIENT_ID") || "",
+        clientSecret: configData.spotify?.client_secret || Deno.env.get("SPOTIFY_CLIENT_SECRET") || "",
+        redirectUri: configData.server?.redirect_uri || Deno.env.get("REDIRECT_URI") || `http://127.0.0.1:${port}/callback`,
         port: port,
-        pollingInterval: parseInt(Deno.env.get("POLLING_INTERVAL") || "3000"),
+        pollingInterval: configData.server?.polling_interval || parseInt(Deno.env.get("POLLING_INTERVAL") || "5000"),
         // VLC settings
-        vlcEnabled: Deno.env.get("VLC_ENABLED") === "true",
-        vlcHost: Deno.env.get("VLC_HOST") || "localhost",
-        vlcPort: parseInt(Deno.env.get("VLC_PORT") || "8080"),
-        vlcPassword: Deno.env.get("VLC_PASSWORD") || "vlc",
-        vlcExePath: Deno.env.get("VLC_EXE_PATH") || "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe",
-        vlcAutoStart: Deno.env.get("VLC_AUTO_START") === "true",
+        vlcEnabled: configData.vlc?.enabled ?? (Deno.env.get("VLC_ENABLED") === "true"),
+        vlcHost: configData.vlc?.host || Deno.env.get("VLC_HOST") || "127.0.0.1", 
+        vlcPort: configData.vlc?.port || parseInt(Deno.env.get("VLC_PORT") || "8080"),
+        vlcPassword: configData.vlc?.password || Deno.env.get("VLC_PASSWORD") || "vlc",
+        vlcExePath: configData.vlc?.exe_path || Deno.env.get("VLC_EXE_PATH") || "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe",
+        vlcAutoStart: configData.vlc?.auto_start ?? (Deno.env.get("VLC_AUTO_START") === "true"),
+        vlcShowGui: configData.vlc?.show_gui ?? (Deno.env.get("VLC_SHOW_GUI") !== "false"), // Default to true
     };
 }
 
 // Validate that required configuration is present
 export function validateConfig(config: Config): void {
-    if (!config.clientId) {
-        throw new Error("SPOTIFY_CLIENT_ID environment variable is required");
+    // Only require Spotify credentials if VLC is not enabled or if both are enabled
+    if (!config.vlcEnabled) {
+        if (!config.clientId) {
+            throw new Error("SPOTIFY_CLIENT_ID environment variable is required");
+        }
+        if (!config.clientSecret) {
+            throw new Error("SPOTIFY_CLIENT_SECRET environment variable is required");
+        }
     }
-    if (!config.clientSecret) {
-        throw new Error("SPOTIFY_CLIENT_SECRET environment variable is required");
+    
+    // VLC-specific validation
+    if (config.vlcEnabled) {
+        if (!config.vlcHost) {
+            throw new Error("VLC_HOST is required when VLC is enabled");
+        }
+        if (!config.vlcPort || config.vlcPort <= 0) {
+            throw new Error("VLC_PORT must be a valid port number when VLC is enabled");
+        }
     }
 }

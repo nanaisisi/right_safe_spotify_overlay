@@ -14,13 +14,13 @@ rem Create VLC-specific .env file
 (
 echo # VLC Media Player integration
 echo VLC_ENABLED=true
-echo VLC_HOST=localhost
+echo VLC_HOST=127.0.0.1
 echo VLC_PORT=8080
-echo VLC_PASSWORD=vlc
+echo VLC_PASSWORD=doragon
 echo.
 echo # Server configuration
 echo PORT=8081
-echo POLLING_INTERVAL=10000
+echo POLLING_INTERVAL=5000
 echo.
 echo # Spotify settings ^(not used in VLC mode^)
 echo SPOTIFY_CLIENT_ID=
