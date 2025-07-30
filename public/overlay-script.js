@@ -12,10 +12,15 @@ ws.onopen = function () {
 };
 
 ws.onmessage = function (event) {
+  console.log("Received WebSocket data:", event.data);
+
   try {
     const data = JSON.parse(event.data);
+    console.log("Parsed data:", data);
+    console.log("Source field:", data.source);
     updateTrackInfo(data);
   } catch (error) {
+    console.error("Error parsing WebSocket data:", error);
     // JSONパースエラー時は何も表示しない
     showNoTrack();
   }
@@ -75,11 +80,13 @@ function showNoTrack() {
 
 // ソース表示の更新
 function updateSourceDisplay(data) {
+  console.log("updateSourceDisplay called with:", data);
   let sourceText = "不明";
   let sourceClass = "source-unknown";
 
   // サーバーから送られてきたソース情報を使用
   if (data.source) {
+    console.log("Found source field:", data.source);
     const source = data.source;
     if (source.includes("VLC")) {
       sourceText = "VLC";
@@ -88,7 +95,14 @@ function updateSourceDisplay(data) {
       sourceText = "Spotify";
       sourceClass = "source-spotify";
     }
+    console.log(
+      "Set sourceText to:",
+      sourceText,
+      "sourceClass to:",
+      sourceClass
+    );
   } else {
+    console.log("No source field found, using fallback detection");
     // フォールバック: トラック情報から推測
     if (data.trackName && data.artistName) {
       if (
@@ -114,8 +128,22 @@ function updateSourceDisplay(data) {
 
   // ソース表示を更新（変更時のみ）
   if (lastSource !== sourceText) {
+    console.log(
+      "Updating source display:",
+      sourceText,
+      "with class:",
+      sourceClass
+    );
     sourceNameElement.textContent = sourceText;
     sourceNameElement.className = sourceClass;
     lastSource = sourceText;
+    console.log(
+      "Source element updated, textContent:",
+      sourceNameElement.textContent,
+      "className:",
+      sourceNameElement.className
+    );
+  } else {
+    console.log("Source unchanged, skipping update:", sourceText);
   }
 }

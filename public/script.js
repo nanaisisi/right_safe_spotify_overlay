@@ -110,14 +110,13 @@ function setSourceIndicator(source, type) {
 function updateLoginStatus() {
   const currentSource = sourceName.textContent;
 
+  // ログインボタンは常時表示
+  loginBtn.style.display = "inline-block";
+
   if (isAuthenticated) {
-    loginBtn.style.display = "none";
     loginStatus.textContent = "✅ Spotify認証済み";
     loginStatus.className = "status-authenticated";
   } else {
-    // VLC使用中でもSpotifyログインボタンを表示
-    loginBtn.style.display = "inline-block";
-
     if (currentSource === "VLC") {
       loginStatus.textContent = "🎵 VLC使用中 (Spotifyも利用可能)";
       loginStatus.className = "status-vlc-mode";

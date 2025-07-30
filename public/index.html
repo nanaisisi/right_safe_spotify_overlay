@@ -17,10 +17,17 @@
       </div>
       <div id="controls">
         <div id="login-section">
-          <button id="login-btn" onclick="handleLogin()" style="display: none">
+          <button id="login-btn" onclick="handleLogin()">
             🎵 Spotifyでログイン
           </button>
           <span id="login-status">認証状態を確認中...</span>
+          <div id="login-url-info">
+            <p><strong>SpotifyログインURL:</strong></p>
+            <a href="/login" target="_blank" class="login-url">
+              http://127.0.0.1:8081/login
+            </a>
+            <p class="login-note">※直接このURLからもログインできます</p>
+          </div>
         </div>
         <div id="obs-info">
           <p><strong>OBS用オーバーレイ:</strong></p>

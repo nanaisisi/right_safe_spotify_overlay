@@ -56,6 +56,13 @@ serve(async (req) => {
         return response;
     }
 
+    if (url.pathname === "/overlay") {
+        const html = await (globalThis as any).Deno.readTextFile("public/overlay.html");
+        return new Response(html, {
+            headers: { "Content-Type": "text/html" }
+        });
+    }
+
     if (url.pathname === "/vlc-debug") {
         if (!config.vlcEnabled) {
             return new Response("VLC mode is not enabled. Set vlc.enabled=true in config.toml", 
@@ -110,6 +117,9 @@ if ((globalThis as any).Deno.build.os !== "windows") {
 console.log(`Spotify Overlay Server is running on:`);
 console.log(`  - Local:   http://127.0.0.1:${config.port}/`);
 console.log(`  - Network: http://localhost:${config.port}/`);
+console.log(`\nOBS Overlay URLs:`);
+console.log(`  - Main Overlay: http://127.0.0.1:${config.port}/overlay`);
+console.log(`  - Direct File:  http://127.0.0.1:${config.port}/overlay.html`);
 console.log(`\nMedia Source: ${config.vlcEnabled ? 'VLC Media Player (with Spotify fallback)' : 'Spotify'}`);
 if (config.vlcEnabled) {
     console.log(`VLC Connection: http://${config.vlcHost}:${config.vlcPort}/`);
@@ -120,12 +130,11 @@ if (config.vlcEnabled) {
 }
 console.log(`\nTo get started:`);
 console.log(`  1. Open http://127.0.0.1:${config.port}/ in your browser`);
+console.log(`  2. 🎵 For Spotify login: http://127.0.0.1:${config.port}/login`);
+console.log(`  3. 📺 For OBS overlay: http://127.0.0.1:${config.port}/overlay`);
 if (!config.vlcEnabled) {
-    console.log(`  2. ⚠️  Spotify authentication required!`);
-    console.log(`     Go to http://127.0.0.1:${config.port}/login to authenticate with Spotify`);
-    console.log(`     Note: This connects to your Spotify account to read currently playing tracks`);
+    console.log(`  4. ⚠️  Spotify authentication required for track info!`);
 } else {
-    console.log(`  2. Make sure VLC Web Interface is enabled (Preferences > Interface > Main interfaces > Web)`);
-    console.log(`  3. If VLC connection fails, run helper scripts for detailed setup instructions`);
-    console.log(`  4. 🎵 For Spotify integration: http://127.0.0.1:${config.port}/login`);
+    console.log(`  4. Make sure VLC Web Interface is enabled (Preferences > Interface > Main interfaces > Web)`);
+    console.log(`  5. If VLC connection fails, run helper scripts for detailed setup instructions`);
 }

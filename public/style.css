@@ -249,6 +249,42 @@ body {
   border: 1px solid #ff6600;
 }
 
+/* ログインURL表示 */
+#login-url-info {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: rgba(29, 185, 84, 0.1);
+  border-radius: 5px;
+  border: 1px solid rgba(29, 185, 84, 0.3);
+}
+
+#login-url-info p {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+.login-url {
+  color: #1db954;
+  text-decoration: none;
+  font-weight: bold;
+  padding: 5px 10px;
+  background-color: rgba(29, 185, 84, 0.2);
+  border-radius: 3px;
+  display: inline-block;
+  margin: 5px 0;
+}
+
+.login-url:hover {
+  background-color: rgba(29, 185, 84, 0.3);
+  text-decoration: underline;
+}
+
+.login-note {
+  font-size: 12px;
+  color: #cccccc;
+  font-style: italic;
+}
+
 /* レスポンシブデザイン */
 @media (max-width: 600px) {
   #track-name {
