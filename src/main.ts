@@ -1,440 +1,38 @@
 import { serve } from "https://deno.land/std@0.140.0/http/server.ts";
 import { serveDir } from "https://deno.land/std@0.140.0/http/file_server.ts";
-import { encode } from "https://deno.land/std@0.140.0/encoding/base64.ts";
 import { loadConfig, validateConfig } from "../config.ts";
+import { VLCProcessManager } from "./vlc/vlc-process.ts";
+import { SpotifyAuth } from "./auth/spotify-auth.ts";
+import { SpotifyPlayer } from "./media/spotify-player.ts";
+import { VLCPlayer } from "./media/vlc-player.ts";
+import { UnifiedPlayer } from "./media/unified-player.ts";
+import { WebSocketManager } from "./websocket/websocket-handler.ts";
+import { generateFavicon } from "./utils/helpers.ts";
 
 // Load configuration
 const config = loadConfig();
 validateConfig(config);
 
-// VLC process management - only used if auto-start is enabled
-let vlcProcess: Deno.ChildProcess | null = null;
+// Initialize components
+const vlcProcessManager = new VLCProcessManager(config);
+const spotifyAuth = new SpotifyAuth(config);
+const spotifyPlayer = new SpotifyPlayer(spotifyAuth, config);
+const vlcPlayer = new VLCPlayer(config);
+const unifiedPlayer = new UnifiedPlayer(spotifyPlayer, vlcPlayer, config);
+const webSocketManager = new WebSocketManager(unifiedPlayer, config);
 
 // Start VLC if auto-start is enabled (not recommended for production)
 if (config.vlcEnabled && config.vlcAutoStart) {
     console.log("⚠️  VLC auto-start is enabled. This may cause issues when closing the application.");
-    startVLC();
+    vlcProcessManager.startVLC();
 }
-
-async function startVLC() {
-    if (vlcProcess) {
-        console.log("VLC is already running");
-        return;
-    }
-
-    try {
-        const guiText = config.vlcShowGui ? "GUI and " : "";
-        console.log(`Starting VLC (${config.vlcExePath}) with ${guiText}web interface...`);
-        
-        const args = [
-            "--extraintf", "http",       // Add HTTP interface as extra interface
-            "--http-password", config.vlcPassword,
-            "--http-port", config.vlcPort.toString(),
-            "--http-host", "127.0.0.1",  // Use IPv4 explicitly
-            "--http-src", "127.0.0.1",   // Source address for HTTP interface
-            "--no-ipv6"                  // Disable IPv6
-        ];
-        
-        // Add GUI control options
-        if (!config.vlcShowGui) {
-            args.push("--intf", "dummy");  // No GUI interface
-        }
-        
-        const command = new Deno.Command(config.vlcExePath, {
-            args: args,
-            stdout: "piped",
-            stderr: "piped"
-        });
-        
-        vlcProcess = command.spawn();
-        
-        console.log(`✓ VLC started with PID: ${vlcProcess.pid}`);
-        
-        // Wait longer for VLC to initialize
-        console.log("⏳ Waiting for VLC to initialize...");
-        await delay(config.vlcInitDelay);
-        
-        // Check if VLC web interface is accessible
-        await checkVLCWebInterface();
-        
-    } catch (error) {
-        console.error("Failed to start VLC:", error);
-        vlcProcess = null;
-    }
-}
-
-async function checkVLCWebInterface() {
-    const maxRetries = 3;
-    let lastError = null;
-    
-    for (let i = 0; i < maxRetries; i++) {
-        try {
-            const response = await fetch(`http://127.0.0.1:${config.vlcPort}/requests/status.json`, {
-                headers: {
-                    'Authorization': 'Basic ' + btoa(':' + config.vlcPassword)
-                }
-            });
-            
-            if (response.ok) {
-                console.log("✓ VLC web interface is accessible");
-                return;
-            } else {
-                console.error(`✗ VLC web interface returned error: ${response.status} (attempt ${i + 1}/${maxRetries})`);
-            }
-        } catch (error) {
-            lastError = error;
-            console.error(`✗ VLC connection attempt ${i + 1}/${maxRetries} failed:`, error.message);
-            if (i < maxRetries - 1) {
-                console.log("⏳ Retrying in 2 seconds...");
-                await delay(config.vlcRetryDelay);
-            }
-        }
-    }
-    
-    console.error("✗ Failed to connect to VLC web interface after all retries");
-}
-
-function delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-let accessToken: string | null = null;
-let refreshToken: string | null = null;
-let tokenExpiresAt: number | null = null;
-
-const connectedClients = new Set<WebSocket>();
-let lastTrackInfo: any = null;
-let apiCallCount = 0;
-let apiCallResetTime = Date.now() + config.spotifyRateLimitWindow; // Reset API call counter based on config
-
-// 未ログイン警告の状態管理
-let loginWarningCount = 0;
-let lastLoginWarningTime = 0;
-
-async function refreshAccessToken() {
-    if (!refreshToken) {
-        console.error("No refresh token available");
-        return;
-    }
-
-    const res = await fetch("https://accounts.spotify.com/api/token", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Authorization": "Basic " + encode(`${config.clientId}:${config.clientSecret}`),
-        },
-        body: new URLSearchParams({
-            grant_type: "refresh_token",
-            refresh_token: refreshToken,
-        }),
-    });
-
-    if (!res.ok) {
-        const body = await res.text();
-        console.error(`Error refreshing token: ${body}`);
-        // Potentially handle this by forcing a re-login
-        accessToken = null;
-        refreshToken = null;
-        return;
-    }
-
-    const data = await res.json();
-    accessToken = data.access_token;
-    tokenExpiresAt = Date.now() + data.expires_in * 1000;
-    console.log("Access token refreshed");
-}
-
-async function getCurrentlyPlaying() {
-    if (!accessToken) {
-        // 未ログイン警告（設定可能な間隔で最大回数まで）
-        const now = Date.now();
-        if (loginWarningCount < config.loginWarningMaxCount && (now - lastLoginWarningTime) > config.loginWarningInterval) {
-            loginWarningCount++;
-            lastLoginWarningTime = now;
-            console.warn(`⚠️  Spotify not authenticated! (Warning ${loginWarningCount}/${config.loginWarningMaxCount})`);
-            console.warn(`   Please go to http://127.0.0.1:${config.port}/login to authenticate`);
-            console.warn(`   Without authentication, no track information will be available.`);
-        }
-        return null;
-    }
-
-    // Rate limiting check - configurable API limit
-    const now = Date.now();
-    if (now > apiCallResetTime) {
-        apiCallCount = 0;
-        apiCallResetTime = now + config.spotifyRateLimitWindow;
-    }
-    
-    if (apiCallCount >= config.spotifyApiLimit) {
-        console.log("API rate limit reached, skipping request");
-        return lastTrackInfo; // Return cached info
-    }
-
-    if (tokenExpiresAt && Date.now() >= tokenExpiresAt) {
-        await refreshAccessToken();
-    }
-
-    apiCallCount++;
-    const res = await fetch("https://api.spotify.com/v1/me/player/currently-playing", {
-        headers: {
-            "Authorization": `Bearer ${accessToken}`,
-        },
-    });
-
-    if (res.status === 204) {
-        // No content, nothing is playing
-        lastTrackInfo = null;
-        return null;
-    }
-    if (res.status === 401) {
-        // Unauthorized, token might have expired
-        await refreshAccessToken();
-        return getCurrentlyPlaying(); // Retry after refreshing
-    }
-    if (res.status === 429) {
-        // Rate limited by Spotify
-        const retryAfter = res.headers.get("Retry-After");
-        console.log(`Rate limited by Spotify. Retry after: ${retryAfter} seconds`);
-        return lastTrackInfo; // Return cached info
-    }
-    if (!res.ok) {
-        const body = await res.text();
-        console.error(`Error fetching currently playing: ${body}`);
-        return lastTrackInfo; // Return cached info on error
-    }
-
-    const data = await res.json();
-    if (!data.item) {
-        lastTrackInfo = null;
-        return null;
-    }
-
-    const trackInfo = {
-        trackName: data.item.name,
-        artistName: data.item.artists.map((artist: any) => artist.name).join(", "),
-        isPlaying: data.is_playing,
-        progressMs: data.progress_ms,
-        durationMs: data.item.duration_ms,
-    };
-
-    lastTrackInfo = trackInfo;
-    return trackInfo;
-}
-
-// VLC Media Player integration
-async function getCurrentlyPlayingVLC() {
-    if (!config.vlcEnabled) {
-        return null;
-    }
-
-    try {
-        const auth = btoa(`:${config.vlcPassword}`);
-        const vlcUrl = `http://127.0.0.1:${config.vlcPort}/requests/status.json`;
-        
-        const res = await fetch(vlcUrl, {
-            headers: {
-                "Authorization": `Basic ${auth}`,
-            },
-            signal: AbortSignal.timeout(config.vlcConnectionTimeout) // 設定可能なタイムアウト
-        });
-
-        if (!res.ok) {
-            // エラーログを減らす - 初回のみ表示
-            if (!lastTrackInfo) {
-                if (res.status === 404) {
-                    console.error(`✗ VLC Web Interface not found. Please enable HTTP interface in VLC.`);
-                } else if (res.status === 401) {
-                    console.error(`✗ VLC authentication failed. Check vlc.password setting in config.toml.`);
-                }
-            }
-            return lastTrackInfo;
-        }
-
-        const data = await res.json();
-        
-        if (!data.information || !data.information.category || !data.information.category.meta) {
-            lastTrackInfo = null;
-            return null;
-        }
-
-        const meta = data.information.category.meta;
-        const trackName = meta.title || meta.filename || "Unknown Track";
-        const artistName = meta.artist || meta.album || "Unknown Artist";
-        
-        const trackInfo = {
-            trackName: trackName,
-            artistName: artistName,
-            isPlaying: data.state === "playing",
-            progressMs: Math.floor((data.time || 0) * 1000),
-            durationMs: Math.floor((data.length || 0) * 1000),
-        };
-
-        lastTrackInfo = trackInfo;
-        return trackInfo;
-    } catch (error) {
-        // エラーログを静かに - 接続エラーは頻繁に発生する可能性がある
-        // 初回接続エラーのみログに記録
-        if (!lastTrackInfo && error.message.includes("connection")) {
-            console.error("✗ VLC connection failed. Please ensure VLC is running with HTTP interface enabled.");
-        }
-        return lastTrackInfo;
-    }
-}
-
-// Unified function to get currently playing from either Spotify or VLC
-let vlcStoppedTime: number | null = null; // VLC停止時刻を記録
-let isInFallbackMode: boolean = false; // フォールバックモード中かどうか
-let lastUsedSource: string = ""; // 実際に使用したソースを記録
-
-async function getCurrentlyPlayingUnified() {
-    if (config.vlcEnabled) {
-        // フォールバックモード中はSpotifyを優先使用
-        if (isInFallbackMode) {
-            const spotifyTrack = await getCurrentlyPlaying();
-            if (spotifyTrack && spotifyTrack.isPlaying) {
-                // Spotify再生中 - VLCチェックは不要
-                lastUsedSource = "Spotify (VLC→10s fallback)";
-                return spotifyTrack;
-            } else {
-                // Spotifyも停止中 - VLCの状態を再確認してフォールバックモードを解除するかチェック
-                const vlcTrack = await getCurrentlyPlayingVLC();
-                if (vlcTrack && vlcTrack.isPlaying) {
-                    // VLCが再生開始 - フォールバックモード解除
-                    vlcStoppedTime = null;
-                    isInFallbackMode = false;
-                    lastUsedSource = "VLC";
-                    return vlcTrack;
-                } else {
-                    // VLCも停止中 - フォールバックモード継続
-                    lastUsedSource = spotifyTrack ? "Spotify (VLC→10s fallback)" : "None (both unavailable)";
-                    return spotifyTrack;
-                }
-            }
-        }
-
-        // 通常モード - まずVLCを確認
-        const vlcTrack = await getCurrentlyPlayingVLC();
-        
-        if (vlcTrack && vlcTrack.isPlaying) {
-            // VLC再生中 - すべての状態をリセット
-            vlcStoppedTime = null;
-            isInFallbackMode = false;
-            lastUsedSource = "VLC";
-            return vlcTrack;
-        } else if (vlcTrack && !vlcTrack.isPlaying) {
-            // VLC一時停止中
-            if (vlcStoppedTime === null) {
-                vlcStoppedTime = Date.now();
-            }
-            
-            // 停止から設定された時間経過していない場合はVLCの情報を返す
-            const timeSinceStopped = Date.now() - vlcStoppedTime;
-            if (timeSinceStopped < config.vlcFallbackDelay) {
-                lastUsedSource = "VLC (paused)";
-                return vlcTrack;
-            }
-            
-            // 10秒経過 - Spotifyをチェックしてフォールバックモードに移行
-            const spotifyTrack = await getCurrentlyPlaying();
-            if (spotifyTrack) {
-                isInFallbackMode = true;
-                lastUsedSource = "Spotify (VLC→10s fallback)";
-                return spotifyTrack;
-            } else {
-                lastUsedSource = "VLC (paused, Spotify unavailable)";
-                return vlcTrack;
-            }
-        } else {
-            // VLC接続失敗 - 即座にSpotifyにフォールバック
-            vlcStoppedTime = null;
-            const spotifyTrack = await getCurrentlyPlaying();
-            if (spotifyTrack) {
-                lastUsedSource = "Spotify (VLC unavailable)";
-                return spotifyTrack;
-            } else {
-                lastUsedSource = "None (both unavailable)";
-                return null;
-            }
-        }
-    } else {
-        lastUsedSource = "Spotify";
-        return await getCurrentlyPlaying();
-    }
-}
-
-// Adaptive polling system for currently playing song
-let lastBroadcastTrack: any = null;
-let lastTrackChangeTime = Date.now();
-let consecutiveNoChanges = 0;
-let currentPollingInterval = 5000; // Default start
-// Spotify用の間隔（API制限を考慮して長め）
-const spotifyShortInterval = 10000; // 10秒間隔
-const spotifyLongInterval = 60000;  // 60秒間隔
-// VLC用の間隔（ローカルAPIなので短め）
-const vlcShortInterval = 5000;  // 5秒間隔
-const vlcLongInterval = 10000;  // 10秒間隔
-
-async function checkAndBroadcastTrack() {
-    const nowPlaying = await getCurrentlyPlayingUnified();
-    
-    // Only broadcast if track changed or if it's the first time
-    const currentTrackId = nowPlaying ? `${nowPlaying.trackName}-${nowPlaying.artistName}-${nowPlaying.isPlaying}` : null;
-    const lastTrackId = lastBroadcastTrack ? `${lastBroadcastTrack.trackName}-${lastBroadcastTrack.artistName}-${lastBroadcastTrack.isPlaying}` : null;
-    
-    // 使用するポーリング間隔を決定（SpotifyとVLCで異なる間隔）
-    const shortInterval = config.vlcEnabled ? vlcShortInterval : spotifyShortInterval;
-    const longInterval = config.vlcEnabled ? vlcLongInterval : spotifyLongInterval;
-    
-    if (currentTrackId !== lastTrackId) {
-        // Track changed - broadcast and reset polling to frequent mode
-        const messageData = nowPlaying ? {
-            ...nowPlaying,
-            source: lastUsedSource
-        } : null;
-        
-        const message = JSON.stringify(messageData);
-        for (const client of connectedClients) {
-            if (client.readyState === WebSocket.OPEN) {
-                client.send(message);
-            }
-        }
-        lastBroadcastTrack = nowPlaying;
-        lastTrackChangeTime = Date.now();
-        consecutiveNoChanges = 0;
-        currentPollingInterval = shortInterval;
-        
-        console.log(`Track updated (${lastUsedSource}): ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (polling: ${currentPollingInterval}ms)`);
-    } else {
-        // No change detected
-        consecutiveNoChanges++;
-        const timeSinceLastChange = Date.now() - lastTrackChangeTime;
-        
-        // If no changes for more than configured threshold, switch to long interval
-        if (timeSinceLastChange > config.longPollingThreshold && currentPollingInterval === shortInterval) {
-            currentPollingInterval = longInterval;
-            console.log(`Switching to long polling interval (${longInterval}ms) - no track changes for ${Math.round(timeSinceLastChange / 1000)}s`);
-        }
-    }
-    
-    // Schedule next check with current interval
-    setTimeout(checkAndBroadcastTrack, currentPollingInterval);
-}
-
-// Start the adaptive polling
-setTimeout(checkAndBroadcastTrack, 1000); // Start after 1 second
 
 
 serve(async (req) => {
     const url = new URL(req.url);
 
     if (url.pathname === "/login") {
-        const scope = "user-read-currently-playing";
-        const authUrl = new URL("https://accounts.spotify.com/authorize");
-        authUrl.searchParams.set("response_type", "code");
-        authUrl.searchParams.set("client_id", config.clientId);
-        authUrl.searchParams.set("scope", scope);
-        authUrl.searchParams.set("redirect_uri", config.redirectUri);
-        return Response.redirect(authUrl.toString(), 302);
+        return Response.redirect(spotifyAuth.getAuthUrl(), 302);
     }
 
     if (url.pathname === "/callback") {
@@ -443,65 +41,18 @@ serve(async (req) => {
             return new Response("Error: No code provided", { status: 400 });
         }
 
-        const res = await fetch("https://accounts.spotify.com/api/token", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Authorization": "Basic " + encode(`${config.clientId}:${config.clientSecret}`),
-            },
-            body: new URLSearchParams({
-                grant_type: "authorization_code",
-                code: code,
-                redirect_uri: config.redirectUri,
-            }),
-        });
-
-        if (!res.ok) {
-            const body = await res.text();
-            return new Response(`Error: ${body}`, { status: res.status });
+        const success = await spotifyAuth.handleCallback(code);
+        if (!success) {
+            return new Response("Authentication failed", { status: 400 });
         }
-
-        const data = await res.json();
-        accessToken = data.access_token;
-        refreshToken = data.refresh_token;
-        tokenExpiresAt = Date.now() + data.expires_in * 1000;
-
-        // ログイン成功時に警告カウントをリセット
-        loginWarningCount = 0;
-        lastLoginWarningTime = 0;
-        console.log("✓ Spotify authentication successful!");
 
         // Redirect to home page after successful login
         return Response.redirect(`http://127.0.0.1:${config.port}/`, 302);
     }
 
     if (url.pathname === "/ws") {
-        const { response, socket } = Deno.upgradeWebSocket(req);
-
-        socket.onopen = () => {
-            console.log("WebSocket connection opened");
-            connectedClients.add(socket);
-            
-            // Send current track info immediately to new client
-            if (lastBroadcastTrack && socket.readyState === WebSocket.OPEN) {
-                const messageData = {
-                    ...lastBroadcastTrack,
-                    source: lastUsedSource
-                };
-                socket.send(JSON.stringify(messageData));
-                console.log("Sent current track info to new client");
-            }
-        };
-
-        socket.onclose = () => {
-            console.log("WebSocket connection closed");
-            connectedClients.delete(socket);
-        };
-
-        socket.onerror = (e) => {
-            console.error("WebSocket error:", e);
-        };
-
+        const { response, socket } = (globalThis as any).Deno.upgradeWebSocket(req);
+        webSocketManager.handleConnection(socket);
         return response;
     }
 
@@ -511,88 +62,14 @@ serve(async (req) => {
                 { status: 400 });
         }
 
-        let debugInfo = `VLC Debug Information\n=====================\n\n`;
-        debugInfo += `Configuration:\n`;
-        debugInfo += `- Host: ${config.vlcHost}\n`;
-        debugInfo += `- Port: ${config.vlcPort}\n`;
-        debugInfo += `- Password: ${config.vlcPassword ? '[SET]' : '[NOT SET]'}\n\n`;
-
-        try {
-            const auth = btoa(`:${config.vlcPassword}`);
-            const testUrl = `http://${config.vlcHost}:${config.vlcPort}/requests/status.json`;
-            debugInfo += `Testing connection to: ${testUrl}\n\n`;
-
-            const res = await fetch(testUrl, {
-                headers: {
-                    "Authorization": `Basic ${auth}`,
-                },
-            });
-
-            debugInfo += `Response Status: ${res.status} ${res.statusText}\n`;
-            debugInfo += `Response Headers:\n`;
-            for (const [key, value] of res.headers.entries()) {
-                debugInfo += `  ${key}: ${value}\n`;
-            }
-
-            if (res.ok) {
-                const data = await res.json();
-                debugInfo += `\nResponse Data:\n`;
-                debugInfo += `- State: ${data.state || 'unknown'}\n`;
-                debugInfo += `- Position: ${data.position || 'unknown'}\n`;
-                debugInfo += `- Time: ${data.time || 'unknown'}\n`;
-                debugInfo += `- Length: ${data.length || 'unknown'}\n`;
-                
-                if (data.information) {
-                    debugInfo += `- Information available: Yes\n`;
-                    if (data.information.category && data.information.category.meta) {
-                        const meta = data.information.category.meta;
-                        debugInfo += `- Title: ${meta.title || 'Not available'}\n`;
-                        debugInfo += `- Artist: ${meta.artist || 'Not available'}\n`;
-                        debugInfo += `- Filename: ${meta.filename || 'Not available'}\n`;
-                    } else {
-                        debugInfo += `- Metadata: Not available\n`;
-                    }
-                } else {
-                    debugInfo += `- Information available: No\n`;
-                }
-            } else {
-                debugInfo += `\nError Details:\n`;
-                const errorText = await res.text();
-                debugInfo += errorText;
-                
-                if (res.status === 401) {
-                    debugInfo += `\n\nTroubleshooting for 401 Unauthorized:\n`;
-                    debugInfo += `1. Check if VLC Web Interface password is set\n`;
-                    debugInfo += `2. VLC Settings: Interface > Main interfaces > Lua > Lua HTTP > Password\n`;
-                    debugInfo += `3. Or start VLC with: vlc --intf http --http-password vlc --http-port 8080\n`;
-                } else if (res.status === 404) {
-                    debugInfo += `\n\nTroubleshooting for 404 Not Found:\n`;
-                    debugInfo += `1. Make sure VLC Web Interface is enabled\n`;
-                    debugInfo += `2. Check "WEB" in Interface > Main interfaces\n`;
-                    debugInfo += `3. Restart VLC completely\n`;
-                }
-            }
-
-        } catch (error) {
-            debugInfo += `\nConnection Error:\n${error.message}\n`;
-        }
-
+        const debugInfo = await vlcPlayer.getDebugInfo();
         return new Response(debugInfo, {
             headers: { "Content-Type": "text/plain" }
         });
     }
 
     if (url.pathname === "/favicon.ico") {
-        // Return a simple 16x16 transparent PNG favicon
-        const favicon = new Uint8Array([
-            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-            0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x10,
-            0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0xf3, 0xff, 0x61, 0x00, 0x00, 0x00,
-            0x0b, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-            0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
-            0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
-        ]);
-        
+        const favicon = generateFavicon();
         return new Response(favicon, {
             headers: {
                 "Content-Type": "image/png",
@@ -602,47 +79,10 @@ serve(async (req) => {
     }
 
     if (url.pathname === "/vlc-test" && config.vlcEnabled) {
-        // VLC diagnostic endpoint
-        try {
-            const auth = btoa(`:${config.vlcPassword}`);
-            const vlcUrl = `http://${config.vlcHost}:${config.vlcPort}/requests/status.json`;
-            
-            const res = await fetch(vlcUrl, {
-                headers: {
-                    "Authorization": `Basic ${auth}`,
-                },
-            });
-
-            const diagnostic = {
-                vlcUrl: vlcUrl,
-                status: res.status,
-                statusText: res.statusText,
-                ok: res.ok,
-                data: res.ok ? await res.json() : null,
-                config: {
-                    vlcEnabled: config.vlcEnabled,
-                    vlcHost: config.vlcHost,
-                    vlcPort: config.vlcPort,
-                    vlcPassword: config.vlcPassword ? "***" : "NOT SET"
-                }
-            };
-
-            return new Response(JSON.stringify(diagnostic, null, 2), {
-                headers: { "Content-Type": "application/json" }
-            });
-        } catch (error) {
-            return new Response(JSON.stringify({
-                error: error.message,
-                config: {
-                    vlcEnabled: config.vlcEnabled,
-                    vlcHost: config.vlcHost,
-                    vlcPort: config.vlcPort,
-                    vlcPassword: config.vlcPassword ? "***" : "NOT SET"
-                }
-            }, null, 2), {
-                headers: { "Content-Type": "application/json" }
-            });
-        }
+        const diagnostic = await vlcPlayer.getTestDiagnostic();
+        return new Response(JSON.stringify(diagnostic, null, 2), {
+            headers: { "Content-Type": "application/json" }
+        });
     }
 
     return serveDir(req, {
@@ -655,24 +95,16 @@ serve(async (req) => {
 
 // Graceful shutdown
 function gracefulShutdown() {
-    if (vlcProcess) {
-        console.log("Terminating VLC process...");
-        try {
-            vlcProcess.kill("SIGTERM");
-        } catch (error) {
-            console.error("Error terminating VLC process:", error);
-        }
-        vlcProcess = null;
-    }
+    vlcProcessManager.shutdown();
     console.log("Server shutting down...");
-    Deno.exit(0);
+    (globalThis as any).Deno.exit(0);
 }
 
 // Handle shutdown signals (Windows compatible)
-Deno.addSignalListener("SIGINT", gracefulShutdown);  // Ctrl+C
-if (Deno.build.os !== "windows") {
+(globalThis as any).Deno.addSignalListener("SIGINT", gracefulShutdown);  // Ctrl+C
+if ((globalThis as any).Deno.build.os !== "windows") {
     // SIGTERM is not supported on Windows
-    Deno.addSignalListener("SIGTERM", gracefulShutdown);
+    (globalThis as any).Deno.addSignalListener("SIGTERM", gracefulShutdown);
 }
 
 console.log(`Spotify Overlay Server is running on:`);
@@ -694,6 +126,6 @@ if (!config.vlcEnabled) {
     console.log(`     Note: This connects to your Spotify account to read currently playing tracks`);
 } else {
     console.log(`  2. Make sure VLC Web Interface is enabled (Preferences > Interface > Main interfaces > Web)`);
-    console.log(`  3. If VLC connection fails, run 'vlc-setup-helper.bat' for detailed setup instructions`);
+    console.log(`  3. If VLC connection fails, run helper scripts for detailed setup instructions`);
     console.log(`  4. 🎵 For Spotify integration: http://127.0.0.1:${config.port}/login`);
 }
