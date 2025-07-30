@@ -6,6 +6,7 @@ const containerElement = document.getElementById("overlay-container");
 
 let currentTrack = null;
 let lastSource = "";
+let sourceAnalysisData = null;
 
 ws.onopen = function () {
   console.log("WebSocket connected for OBS overlay");
@@ -27,10 +28,25 @@ ws.onmessage = function (event) {
     const data = JSON.parse(event.data);
     console.log("=== Parsed JSON Data ===");
     console.log("Full data object:", data);
+
+    // 音源分析結果の場合
+    if (data.type === "sourceAnalysisResult") {
+      handleSourceAnalysisResult(data);
+      return;
+    }
+
+    // 通常の楽曲情報の場合
     console.log("trackName:", data.trackName);
     console.log("artistName:", data.artistName);
     console.log("source:", data.source);
     console.log("isPlaying:", data.isPlaying);
+
+    // 音源分析データを保存
+    if (data.sourceAnalysis) {
+      sourceAnalysisData = data.sourceAnalysis;
+      console.log("Source analysis data:", sourceAnalysisData);
+    }
+
     updateTrackInfo(data);
   } catch (error) {
     console.error("=== JSON Parse Error ===");
@@ -48,6 +64,99 @@ ws.onclose = function () {
 ws.onerror = function (error) {
   showNoTrack();
 };
+
+// 音源判定リクエストを送信する関数
+function requestSourceAnalysis(trackName, artistName) {
+  if (ws.readyState === WebSocket.OPEN) {
+    const analysisRequest = {
+      type: "sourceAnalysis",
+      trackName: trackName,
+      artistName: artistName,
+      timestamp: Date.now(),
+    };
+
+    console.log("Sending source analysis request:", analysisRequest);
+    ws.send(JSON.stringify(analysisRequest));
+  }
+}
+
+// 音源分析結果を処理する関数
+function handleSourceAnalysisResult(data) {
+  console.log("=== Source Analysis Result Received ===");
+  console.log("Analysis for:", `"${data.trackName}" by "${data.artistName}"`);
+  console.log("Analysis result:", data.analysis);
+
+  // 分析結果を保存
+  sourceAnalysisData = data.analysis;
+
+  // 現在表示中の楽曲と一致する場合、表示を更新
+  if (currentTrack === `${data.trackName}-${data.artistName}`) {
+    console.log("Analysis matches current track, updating display");
+
+    // ソース表示を更新（信頼度付きで）
+    const sourceText = getSourceTextFromAnalysis(sourceAnalysisData);
+    const sourceClass = getSourceClassFromAnalysis(sourceAnalysisData);
+    const fullSourceText = sourceText + ` (${sourceAnalysisData.confidence}%)`;
+
+    if (lastSource !== fullSourceText) {
+      sourceNameElement.textContent = fullSourceText;
+      sourceNameElement.className = sourceClass;
+      lastSource = fullSourceText;
+
+      console.log(
+        "Updated source display with analysis result:",
+        fullSourceText
+      );
+    }
+
+    // 詳細分析結果をコンソールに表示
+    showSourceAnalysis();
+  } else {
+    console.log("Analysis for different track, storing for later use");
+  }
+}
+
+// 分析結果からソーステキストを取得
+function getSourceTextFromAnalysis(analysis) {
+  switch (analysis.detectedSource) {
+    case "Spotify":
+      return "Spotify";
+    case "VLC":
+      return "VLC";
+    default:
+      return "不明";
+  }
+}
+
+// 分析結果からソースクラスを取得
+function getSourceClassFromAnalysis(analysis) {
+  switch (analysis.detectedSource) {
+    case "Spotify":
+      return "source-spotify";
+    case "VLC":
+      return "source-vlc";
+    default:
+      return "source-unknown";
+  }
+}
+
+// 音源情報の詳細分析を表示する関数
+function showSourceAnalysis() {
+  if (!sourceAnalysisData) {
+    console.log("No source analysis data available");
+    return;
+  }
+
+  const analysisInfo = [
+    `音源: ${sourceAnalysisData.detectedSource}`,
+    `信頼度: ${sourceAnalysisData.confidence}%`,
+    `判定理由: ${sourceAnalysisData.reasons.join(", ")}`,
+    `メタデータ品質: ${sourceAnalysisData.metadataQuality}`,
+  ];
+
+  console.log("=== 音源分析結果 ===");
+  analysisInfo.forEach((info) => console.log(info));
+}
 
 function updateTrackInfo(data) {
   console.log("=== updateTrackInfo called ===");
@@ -79,6 +188,9 @@ function updateTrackInfo(data) {
       containerElement.classList.remove("track-change");
     }, 600);
     currentTrack = newTrackId;
+
+    // 新しい楽曲の場合、音源分析をリクエスト
+    requestSourceAnalysis(data.trackName, data.artistName);
   }
 
   // 再生状態によって表示を調整
@@ -130,6 +242,7 @@ function updateSourceDisplay(data) {
 
   let sourceText = "不明";
   let sourceClass = "source-unknown";
+  let sourceConfidence = "";
 
   // サーバーから送られてきたソース情報を使用
   if (data.source) {
@@ -149,6 +262,11 @@ function updateSourceDisplay(data) {
       sourceText = "不明";
       sourceClass = "source-unknown";
       console.log("Unknown source type:", source);
+    }
+
+    // 音源分析データがある場合、信頼度を表示
+    if (sourceAnalysisData && sourceAnalysisData.confidence) {
+      sourceConfidence = ` (${sourceAnalysisData.confidence}%)`;
     }
 
     console.log(
@@ -187,19 +305,25 @@ function updateSourceDisplay(data) {
   }
 
   // ソース表示を更新（変更時のみ）
-  if (lastSource !== sourceText) {
+  const fullSourceText = sourceText + sourceConfidence;
+  if (lastSource !== fullSourceText) {
     console.log("=== Updating Source Display ===");
     console.log("Previous source:", lastSource);
-    console.log("New source:", sourceText, "with class:", sourceClass);
+    console.log("New source:", fullSourceText, "with class:", sourceClass);
 
-    sourceNameElement.textContent = sourceText;
+    sourceNameElement.textContent = fullSourceText;
     sourceNameElement.className = sourceClass;
-    lastSource = sourceText;
+    lastSource = fullSourceText;
 
     console.log("Source element updated:");
     console.log("- textContent:", sourceNameElement.textContent);
     console.log("- className:", sourceNameElement.className);
+
+    // 音源分析結果をコンソールに表示
+    if (sourceAnalysisData) {
+      showSourceAnalysis();
+    }
   } else {
-    console.log("Source unchanged, skipping update:", sourceText);
+    console.log("Source unchanged, skipping update:", fullSourceText);
   }
 }

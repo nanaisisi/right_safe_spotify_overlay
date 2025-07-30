@@ -1,131 +1,240 @@
 import { UnifiedPlayer } from "../media/unified-player.ts";
 import { TrackInfo } from "../media/spotify-player.ts";
+import {
+  SourceAnalyzer,
+  SourceAnalysisResult,
+} from "../media/source-analyzer.ts";
 
 export class WebSocketManager {
-    private connectedClients = new Set<WebSocket>();
-    private unifiedPlayer: UnifiedPlayer;
-    private config: any;
-    
-    // Adaptive polling system for currently playing song
-    private lastBroadcastTrack: any = null;
-    private lastTrackChangeTime = Date.now();
-    private consecutiveNoChanges = 0;
-    private currentPollingInterval = 5000; // Default start
-    
-    // Spotify用の間隔（API制限を考慮して長め）
-    private readonly spotifyShortInterval: number;
-    private readonly spotifyLongInterval: number;
-    // VLC用の間隔（ローカルAPIなので短め）
-    private readonly vlcShortInterval: number;
-    private readonly vlcLongInterval: number;
+  private connectedClients = new Set<WebSocket>();
+  private unifiedPlayer: UnifiedPlayer;
+  private config: any;
 
-    constructor(unifiedPlayer: UnifiedPlayer, config: any) {
-        this.unifiedPlayer = unifiedPlayer;
-        this.config = config;
-        
-        // 設定ファイルからポーリング間隔を読み込み
-        this.spotifyShortInterval = config.spotifyShortInterval || 10000;
-        this.spotifyLongInterval = config.spotifyLongInterval || 30000;
-        this.vlcShortInterval = config.vlcShortInterval || 5000;
-        this.vlcLongInterval = config.vlcLongInterval || 10000;
-        
-        // Start the adaptive polling
-        setTimeout(() => this.checkAndBroadcastTrack(), 1000); // Start after 1 second
-    }
+  // Adaptive polling system for currently playing song
+  private lastBroadcastTrack: any = null;
+  private lastTrackChangeTime = Date.now();
+  private consecutiveNoChanges = 0;
+  private currentPollingInterval = 5000; // Default start
 
-    handleConnection(socket: WebSocket): void {
-        console.log("WebSocket connection opened");
-        this.connectedClients.add(socket);
-        
-        // Send current track info immediately to new client
-        const sendCurrentTrack = async () => {
-            try {
-                const currentTrack = await this.unifiedPlayer.getCurrentlyPlaying();
-                const messageData = currentTrack ? {
-                    ...currentTrack,
-                    source: this.unifiedPlayer.currentSource
-                } : null;
-                
-                if (socket.readyState === WebSocket.OPEN) {
-                    const message = JSON.stringify(messageData);
-                    socket.send(message);
-                    console.log("Sent current track info to new client:", message);
-                }
-            } catch (error) {
-                console.error("Error sending current track to new client:", error);
+  // Spotify用の間隔（API制限を考慮して長め）
+  private readonly spotifyShortInterval: number;
+  private readonly spotifyLongInterval: number;
+  // VLC用の間隔（ローカルAPIなので短め）
+  private readonly vlcShortInterval: number;
+  private readonly vlcLongInterval: number;
+
+  constructor(unifiedPlayer: UnifiedPlayer, config: any) {
+    this.unifiedPlayer = unifiedPlayer;
+    this.config = config;
+
+    // 設定ファイルからポーリング間隔を読み込み
+    this.spotifyShortInterval = config.spotifyShortInterval || 10000;
+    this.spotifyLongInterval = config.spotifyLongInterval || 30000;
+    this.vlcShortInterval = config.vlcShortInterval || 5000;
+    this.vlcLongInterval = config.vlcLongInterval || 10000;
+
+    // Start the adaptive polling
+    setTimeout(() => this.checkAndBroadcastTrack(), 1000); // Start after 1 second
+  }
+
+  handleConnection(socket: WebSocket): void {
+    console.log("WebSocket connection opened");
+    this.connectedClients.add(socket);
+
+    // メッセージハンドラーを設定
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data.toString());
+        this.handleMessage(socket, message);
+      } catch (error) {
+        console.error("WebSocket message parse error:", error);
+      }
+    };
+
+    // Send current track info immediately to new client
+    const sendCurrentTrack = async () => {
+      try {
+        const currentTrack = await this.unifiedPlayer.getCurrentlyPlaying();
+        const messageData = currentTrack
+          ? {
+              ...currentTrack,
+              source: this.unifiedPlayer.currentSource,
             }
-        };
-        
-        // Send immediately and also after a small delay
-        sendCurrentTrack();
-        setTimeout(sendCurrentTrack, 1000);
+          : null;
 
-        socket.onclose = () => {
-            console.log("WebSocket connection closed");
-            this.connectedClients.delete(socket);
-        };
-
-        socket.onerror = (e) => {
-            console.error("WebSocket error:", e);
-        };
-    }
-
-    private async checkAndBroadcastTrack(): Promise<void> {
-        const nowPlaying = await this.unifiedPlayer.getCurrentlyPlaying();
-        
-        // Only broadcast if track changed or if it's the first time
-        const currentTrackId = nowPlaying ? `${nowPlaying.trackName}-${nowPlaying.artistName}-${nowPlaying.isPlaying}` : null;
-        const lastTrackId = this.lastBroadcastTrack ? `${this.lastBroadcastTrack.trackName}-${this.lastBroadcastTrack.artistName}-${this.lastBroadcastTrack.isPlaying}` : null;
-        
-        // 実際に使用されているソースに基づいて間隔を決定
-        const currentSource = this.unifiedPlayer.currentSource;
-        
-        // より正確なソース判定ロジック
-        const isUsingVLC = currentSource === "VLC" || 
-                          currentSource.includes("VLC (") ||
-                          (currentSource.includes("VLC") && !currentSource.includes("Spotify"));
-        
-        const shortInterval = isUsingVLC ? this.vlcShortInterval : this.spotifyShortInterval;
-        const longInterval = isUsingVLC ? this.vlcLongInterval : this.spotifyLongInterval;
-        
-        // ソース判定の詳細ログ
-        console.log(`Source detection: currentSource="${currentSource}", isUsingVLC=${isUsingVLC}, interval=${shortInterval}ms`);
-        
-        if (currentTrackId !== lastTrackId) {
-            // Track changed - broadcast and reset polling to frequent mode
-            const messageData = nowPlaying ? {
-                ...nowPlaying,
-                source: this.unifiedPlayer.currentSource
-            } : null;
-            
-            const message = JSON.stringify(messageData);
-            console.log("Broadcasting WebSocket message:", message);
-            for (const client of this.connectedClients) {
-                if (client.readyState === WebSocket.OPEN) {
-                    console.log("Sending to WebSocket client");
-                    client.send(message);
-                }
-            }
-            this.lastBroadcastTrack = nowPlaying;
-            this.lastTrackChangeTime = Date.now();
-            this.consecutiveNoChanges = 0;
-            this.currentPollingInterval = shortInterval;
-            
-            console.log(`Track updated (${this.unifiedPlayer.currentSource}): ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (Source-based polling: ${this.currentPollingInterval}ms)`);
-        } else {
-            // No change detected
-            this.consecutiveNoChanges++;
-            const timeSinceLastChange = Date.now() - this.lastTrackChangeTime;
-            
-            // If no changes for more than configured threshold, switch to long interval
-            if (timeSinceLastChange > this.config.longPollingThreshold && this.currentPollingInterval === shortInterval) {
-                this.currentPollingInterval = longInterval;
-                const sourceType = isUsingVLC ? 'VLC-based' : 'Spotify-based';
-                console.log(`Switching to long ${sourceType} polling interval (${longInterval}ms) - no track changes for ${Math.round(timeSinceLastChange / 1000)}s`);
-            }
+        if (socket.readyState === WebSocket.OPEN) {
+          const message = JSON.stringify(messageData);
+          socket.send(message);
+          console.log("Sent current track info to new client:", message);
         }
-        
-        // Schedule next check with current interval
-        setTimeout(() => this.checkAndBroadcastTrack(), this.currentPollingInterval);
+      } catch (error) {
+        console.error("Error sending current track to new client:", error);
+      }
+    };
+
+    sendCurrentTrack();
+
+    socket.onclose = () => {
+      this.connectedClients.delete(socket);
+      console.log("WebSocket connection closed");
+    };
+
+    socket.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      this.connectedClients.delete(socket);
+    };
+  }
+
+  private async handleMessage(socket: WebSocket, message: any): Promise<void> {
+    console.log("Received WebSocket message:", message);
+
+    if (message.type === "sourceAnalysis") {
+      await this.handleSourceAnalysisRequest(socket, message);
     }
+  }
+
+  private async handleSourceAnalysisRequest(
+    socket: WebSocket,
+    request: any
+  ): Promise<void> {
+    try {
+      const { trackName, artistName } = request;
+
+      if (!trackName || !artistName) {
+        console.log(
+          "Invalid source analysis request: missing trackName or artistName"
+        );
+        return;
+      }
+
+      console.log(
+        `Performing source analysis for: "${trackName}" by "${artistName}"`
+      );
+
+      // 現在の楽曲情報を取得
+      const currentTrack = await this.unifiedPlayer.getCurrentlyPlaying();
+
+      // 音源分析を実行
+      const analysisResult = SourceAnalyzer.analyzeSource(
+        trackName,
+        artistName,
+        {
+          source: this.unifiedPlayer.currentSource,
+          duration: currentTrack?.durationMs,
+        }
+      );
+
+      console.log("Source analysis result:", analysisResult);
+
+      // 分析結果をクライアントに送信
+      const response = {
+        type: "sourceAnalysisResult",
+        trackName,
+        artistName,
+        analysis: analysisResult,
+        timestamp: Date.now(),
+      };
+
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(response));
+      }
+    } catch (error) {
+      console.error("Error in source analysis:", error);
+    }
+  }
+
+  private async checkAndBroadcastTrack(): Promise<void> {
+    const nowPlaying = await this.unifiedPlayer.getCurrentlyPlaying();
+
+    // Create a unique ID for comparison
+    const currentTrackId = nowPlaying
+      ? `${nowPlaying.trackName}-${nowPlaying.artistName}-${nowPlaying.isPlaying}`
+      : null;
+    const lastTrackId = this.lastBroadcastTrack
+      ? `${this.lastBroadcastTrack.trackName}-${this.lastBroadcastTrack.artistName}-${this.lastBroadcastTrack.isPlaying}`
+      : null;
+
+    const hasChanged = currentTrackId !== lastTrackId;
+
+    if (hasChanged) {
+      console.log("Track changed, broadcasting update");
+      this.consecutiveNoChanges = 0;
+      this.lastTrackChangeTime = Date.now();
+      this.lastBroadcastTrack = nowPlaying;
+
+      // 音源情報を含めてブロードキャスト
+      const messageData = nowPlaying
+        ? {
+            ...nowPlaying,
+            source: this.unifiedPlayer.currentSource,
+          }
+        : null;
+
+      this.broadcastToAllClients(JSON.stringify(messageData));
+    } else {
+      this.consecutiveNoChanges++;
+    }
+
+    // Determine the current source type and use appropriate intervals
+    const currentSource = this.unifiedPlayer.currentSource;
+    const isVLCSource = currentSource.includes("VLC");
+
+    // Adaptive interval calculation
+    const timeSinceLastChange = Date.now() - this.lastTrackChangeTime;
+
+    let nextInterval: number;
+
+    if (isVLCSource) {
+      // VLC用の間隔（より頻繁にチェック）
+      if (timeSinceLastChange < this.config.longPollingThreshold) {
+        nextInterval = this.vlcShortInterval;
+      } else {
+        nextInterval = this.vlcLongInterval;
+      }
+    } else {
+      // Spotify用の間隔（API制限を考慮）
+      if (timeSinceLastChange < this.config.longPollingThreshold) {
+        nextInterval = this.spotifyShortInterval;
+      } else {
+        nextInterval = this.spotifyLongInterval;
+      }
+    }
+
+    this.currentPollingInterval = nextInterval;
+
+    console.log(
+      `Next check in ${nextInterval}ms (${
+        hasChanged ? "changed" : "no change"
+      }, consecutive no changes: ${
+        this.consecutiveNoChanges
+      }, source: ${currentSource})`
+    );
+
+    // Schedule next check
+    setTimeout(() => this.checkAndBroadcastTrack(), nextInterval);
+  }
+
+  private broadcastToAllClients(message: string): void {
+    const clientsToRemove: WebSocket[] = [];
+
+    for (const client of this.connectedClients) {
+      try {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(message);
+        } else {
+          clientsToRemove.push(client);
+        }
+      } catch (error) {
+        console.error("Error broadcasting to client:", error);
+        clientsToRemove.push(client);
+      }
+    }
+
+    // Clean up closed connections
+    clientsToRemove.forEach((client) => this.connectedClients.delete(client));
+
+    if (clientsToRemove.length > 0) {
+      console.log(`Cleaned up ${clientsToRemove.length} closed connections`);
+    }
+  }
 }
