@@ -1,9 +1,11 @@
 const ws = new WebSocket("ws://127.0.0.1:8081/ws");
 const trackNameElement = document.getElementById("track-name");
 const artistNameElement = document.getElementById("artist-name");
+const sourceNameElement = document.getElementById("source-name");
 const containerElement = document.getElementById("overlay-container");
 
 let currentTrack = null;
+let lastSource = "";
 
 ws.onopen = function () {
   console.log("WebSocket connected for OBS overlay");
@@ -34,6 +36,9 @@ function updateTrackInfo(data) {
     return;
   }
 
+  // ソース表示を更新
+  updateSourceDisplay(data);
+
   // 楽曲が変わった場合のアニメーション
   const newTrackId = `${data.trackName}-${data.artistName}`;
   if (currentTrack !== newTrackId) {
@@ -61,7 +66,58 @@ function updateTrackInfo(data) {
 
 function showNoTrack() {
   trackNameElement.textContent = "楽曲が再生されていません";
-  artistNameElement.textContent = "Spotifyで音楽を再生してください";
+  artistNameElement.textContent = "音楽を再生してください";
+  sourceNameElement.textContent = "未接続";
+  sourceNameElement.className = "source-disconnected";
   containerElement.classList.add("no-track");
   currentTrack = null;
+  lastSource = "";
+}
+
+// ソース表示の更新
+function updateSourceDisplay(data) {
+  let sourceText = "不明";
+  let sourceClass = "source-unknown";
+
+  // サーバーから送られてきたソース情報を使用
+  if (data.source) {
+    const source = data.source;
+    if (source.includes("VLC")) {
+      sourceText = "VLC";
+      sourceClass = "source-vlc";
+    } else if (source.includes("Spotify")) {
+      sourceText = "Spotify";
+      sourceClass = "source-spotify";
+    }
+  } else {
+    // フォールバック: トラック情報から推測
+    if (data.trackName && data.artistName) {
+      if (
+        data.trackName.includes(".") &&
+        (data.trackName.includes(".mp3") ||
+          data.trackName.includes(".flac") ||
+          data.trackName.includes(".wav"))
+      ) {
+        sourceText = "VLC";
+        sourceClass = "source-vlc";
+      } else if (
+        data.artistName === "Unknown Artist" ||
+        data.trackName === "Unknown Track"
+      ) {
+        sourceText = "VLC";
+        sourceClass = "source-vlc";
+      } else {
+        sourceText = "Spotify";
+        sourceClass = "source-spotify";
+      }
+    }
+  }
+
+  // ソース表示を更新（変更時のみ）
+  if (lastSource !== sourceText) {
+    sourceNameElement.textContent = sourceText;
+    sourceNameElement.className = sourceClass;
+    lastSource = sourceText;
+    console.log(`Source changed to: ${sourceText}`);
+  }
 }

@@ -52,7 +52,7 @@ async function startVLC() {
         
         // Wait longer for VLC to initialize
         console.log("⏳ Waiting for VLC to initialize...");
-        await delay(5000);
+        await delay(config.vlcInitDelay);
         
         // Check if VLC web interface is accessible
         await checkVLCWebInterface();
@@ -86,7 +86,7 @@ async function checkVLCWebInterface() {
             console.error(`✗ VLC connection attempt ${i + 1}/${maxRetries} failed:`, error.message);
             if (i < maxRetries - 1) {
                 console.log("⏳ Retrying in 2 seconds...");
-                await delay(2000);
+                await delay(config.vlcRetryDelay);
             }
         }
     }
@@ -105,12 +105,11 @@ let tokenExpiresAt: number | null = null;
 const connectedClients = new Set<WebSocket>();
 let lastTrackInfo: any = null;
 let apiCallCount = 0;
-let apiCallResetTime = Date.now() + 60000; // Reset API call counter every minute
+let apiCallResetTime = Date.now() + config.spotifyRateLimitWindow; // Reset API call counter based on config
 
 // 未ログイン警告の状態管理
 let loginWarningCount = 0;
 let lastLoginWarningTime = 0;
-const LOGIN_WARNING_INTERVAL = 120000; // 2分間隔で警告
 
 async function refreshAccessToken() {
     if (!refreshToken) {
@@ -147,26 +146,26 @@ async function refreshAccessToken() {
 
 async function getCurrentlyPlaying() {
     if (!accessToken) {
-        // 未ログイン警告（2分間隔で最大2回まで）
+        // 未ログイン警告（設定可能な間隔で最大回数まで）
         const now = Date.now();
-        if (loginWarningCount < 2 && (now - lastLoginWarningTime) > LOGIN_WARNING_INTERVAL) {
+        if (loginWarningCount < config.loginWarningMaxCount && (now - lastLoginWarningTime) > config.loginWarningInterval) {
             loginWarningCount++;
             lastLoginWarningTime = now;
-            console.warn(`⚠️  Spotify not authenticated! (Warning ${loginWarningCount}/2)`);
+            console.warn(`⚠️  Spotify not authenticated! (Warning ${loginWarningCount}/${config.loginWarningMaxCount})`);
             console.warn(`   Please go to http://127.0.0.1:${config.port}/login to authenticate`);
             console.warn(`   Without authentication, no track information will be available.`);
         }
         return null;
     }
 
-    // Rate limiting check - max 30 calls per minute
+    // Rate limiting check - configurable API limit
     const now = Date.now();
     if (now > apiCallResetTime) {
         apiCallCount = 0;
-        apiCallResetTime = now + 60000;
+        apiCallResetTime = now + config.spotifyRateLimitWindow;
     }
     
-    if (apiCallCount >= 30) {
+    if (apiCallCount >= config.spotifyApiLimit) {
         console.log("API rate limit reached, skipping request");
         return lastTrackInfo; // Return cached info
     }
@@ -236,7 +235,7 @@ async function getCurrentlyPlayingVLC() {
             headers: {
                 "Authorization": `Basic ${auth}`,
             },
-            signal: AbortSignal.timeout(3000) // 3秒でタイムアウト
+            signal: AbortSignal.timeout(config.vlcConnectionTimeout) // 設定可能なタイムアウト
         });
 
         if (!res.ok) {
@@ -283,16 +282,82 @@ async function getCurrentlyPlayingVLC() {
 }
 
 // Unified function to get currently playing from either Spotify or VLC
+let vlcStoppedTime: number | null = null; // VLC停止時刻を記録
+let isInFallbackMode: boolean = false; // フォールバックモード中かどうか
+let lastUsedSource: string = ""; // 実際に使用したソースを記録
+
 async function getCurrentlyPlayingUnified() {
     if (config.vlcEnabled) {
-        // VLC併用 - VLCからの取得を優先し、失敗時はSpotifyにフォールバック
-        const vlcTrack = await getCurrentlyPlayingVLC();
-        if (vlcTrack) {
-            return vlcTrack;
+        // フォールバックモード中はSpotifyを優先使用
+        if (isInFallbackMode) {
+            const spotifyTrack = await getCurrentlyPlaying();
+            if (spotifyTrack && spotifyTrack.isPlaying) {
+                // Spotify再生中 - VLCチェックは不要
+                lastUsedSource = "Spotify (VLC→10s fallback)";
+                return spotifyTrack;
+            } else {
+                // Spotifyも停止中 - VLCの状態を再確認してフォールバックモードを解除するかチェック
+                const vlcTrack = await getCurrentlyPlayingVLC();
+                if (vlcTrack && vlcTrack.isPlaying) {
+                    // VLCが再生開始 - フォールバックモード解除
+                    vlcStoppedTime = null;
+                    isInFallbackMode = false;
+                    lastUsedSource = "VLC";
+                    return vlcTrack;
+                } else {
+                    // VLCも停止中 - フォールバックモード継続
+                    lastUsedSource = spotifyTrack ? "Spotify (VLC→10s fallback)" : "None (both unavailable)";
+                    return spotifyTrack;
+                }
+            }
         }
-        // VLCで取得できない場合はSpotifyを試す
-        return await getCurrentlyPlaying();
+
+        // 通常モード - まずVLCを確認
+        const vlcTrack = await getCurrentlyPlayingVLC();
+        
+        if (vlcTrack && vlcTrack.isPlaying) {
+            // VLC再生中 - すべての状態をリセット
+            vlcStoppedTime = null;
+            isInFallbackMode = false;
+            lastUsedSource = "VLC";
+            return vlcTrack;
+        } else if (vlcTrack && !vlcTrack.isPlaying) {
+            // VLC一時停止中
+            if (vlcStoppedTime === null) {
+                vlcStoppedTime = Date.now();
+            }
+            
+            // 停止から設定された時間経過していない場合はVLCの情報を返す
+            const timeSinceStopped = Date.now() - vlcStoppedTime;
+            if (timeSinceStopped < config.vlcFallbackDelay) {
+                lastUsedSource = "VLC (paused)";
+                return vlcTrack;
+            }
+            
+            // 10秒経過 - Spotifyをチェックしてフォールバックモードに移行
+            const spotifyTrack = await getCurrentlyPlaying();
+            if (spotifyTrack) {
+                isInFallbackMode = true;
+                lastUsedSource = "Spotify (VLC→10s fallback)";
+                return spotifyTrack;
+            } else {
+                lastUsedSource = "VLC (paused, Spotify unavailable)";
+                return vlcTrack;
+            }
+        } else {
+            // VLC接続失敗 - 即座にSpotifyにフォールバック
+            vlcStoppedTime = null;
+            const spotifyTrack = await getCurrentlyPlaying();
+            if (spotifyTrack) {
+                lastUsedSource = "Spotify (VLC unavailable)";
+                return spotifyTrack;
+            } else {
+                lastUsedSource = "None (both unavailable)";
+                return null;
+            }
+        }
     } else {
+        lastUsedSource = "Spotify";
         return await getCurrentlyPlaying();
     }
 }
@@ -322,7 +387,12 @@ async function checkAndBroadcastTrack() {
     
     if (currentTrackId !== lastTrackId) {
         // Track changed - broadcast and reset polling to frequent mode
-        const message = JSON.stringify(nowPlaying);
+        const messageData = nowPlaying ? {
+            ...nowPlaying,
+            source: lastUsedSource
+        } : null;
+        
+        const message = JSON.stringify(messageData);
         for (const client of connectedClients) {
             if (client.readyState === WebSocket.OPEN) {
                 client.send(message);
@@ -332,15 +402,16 @@ async function checkAndBroadcastTrack() {
         lastTrackChangeTime = Date.now();
         consecutiveNoChanges = 0;
         currentPollingInterval = shortInterval;
-        const source = config.vlcEnabled ? "VLC/Spotify" : "Spotify";
-        console.log(`Track updated (${source}): ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (polling: ${currentPollingInterval}ms)`);
+        
+        console.log(`Track updated (${lastUsedSource}): ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (polling: ${currentPollingInterval}ms)`);
+        console.log(`Broadcasting message:`, JSON.stringify(messageData));
     } else {
         // No change detected
         consecutiveNoChanges++;
         const timeSinceLastChange = Date.now() - lastTrackChangeTime;
         
-        // If no changes for more than 30 seconds, switch to long interval
-        if (timeSinceLastChange > 30000 && currentPollingInterval === shortInterval) {
+        // If no changes for more than configured threshold, switch to long interval
+        if (timeSinceLastChange > config.longPollingThreshold && currentPollingInterval === shortInterval) {
             currentPollingInterval = longInterval;
             console.log(`Switching to long polling interval (${longInterval}ms) - no track changes for ${Math.round(timeSinceLastChange / 1000)}s`);
         }
@@ -414,8 +485,12 @@ serve(async (req) => {
             
             // Send current track info immediately to new client
             if (lastBroadcastTrack && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify(lastBroadcastTrack));
-                console.log("Sent current track info to new client");
+                const messageData = {
+                    ...lastBroadcastTrack,
+                    source: lastUsedSource
+                };
+                socket.send(JSON.stringify(messageData));
+                console.log("Sent current track info to new client:", JSON.stringify(messageData));
             }
         };
 
@@ -621,4 +696,5 @@ if (!config.vlcEnabled) {
 } else {
     console.log(`  2. Make sure VLC Web Interface is enabled (Preferences > Interface > Main interfaces > Web)`);
     console.log(`  3. If VLC connection fails, run 'vlc-setup-helper.bat' for detailed setup instructions`);
+    console.log(`  4. 🎵 For Spotify integration: http://127.0.0.1:${config.port}/login`);
 }

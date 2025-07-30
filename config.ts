@@ -15,6 +15,19 @@ export interface Config {
     vlcExePath: string;
     vlcAutoStart: boolean;
     vlcShowGui: boolean;
+    // Timing settings
+    vlcConnectionTimeout: number;
+    vlcInitDelay: number;
+    vlcRetryDelay: number;
+    vlcFallbackDelay: number;
+    // API rate limiting
+    spotifyApiLimit: number;
+    spotifyRateLimitWindow: number;
+    // Warning settings
+    loginWarningInterval: number;
+    loginWarningMaxCount: number;
+    // Polling intervals
+    longPollingThreshold: number;
 }
 
 // Simple .env file parser
@@ -88,6 +101,19 @@ export function loadConfig(): Config {
         vlcExePath: configData.vlc?.exe_path || Deno.env.get("VLC_EXE_PATH") || "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe",
         vlcAutoStart: configData.vlc?.auto_start ?? (Deno.env.get("VLC_AUTO_START") === "true"),
         vlcShowGui: configData.vlc?.show_gui ?? (Deno.env.get("VLC_SHOW_GUI") !== "false"), // Default to true
+        // Timing settings
+        vlcConnectionTimeout: configData.timing?.vlc_connection_timeout || parseInt(Deno.env.get("VLC_CONNECTION_TIMEOUT") || "3000"),
+        vlcInitDelay: configData.timing?.vlc_init_delay || parseInt(Deno.env.get("VLC_INIT_DELAY") || "5000"),
+        vlcRetryDelay: configData.timing?.vlc_retry_delay || parseInt(Deno.env.get("VLC_RETRY_DELAY") || "2000"),
+        vlcFallbackDelay: configData.timing?.vlc_fallback_delay || parseInt(Deno.env.get("VLC_FALLBACK_DELAY") || "10000"),
+        // API rate limiting
+        spotifyApiLimit: configData.api?.spotify_api_limit || parseInt(Deno.env.get("SPOTIFY_API_LIMIT") || "30"),
+        spotifyRateLimitWindow: configData.api?.spotify_rate_limit_window || parseInt(Deno.env.get("SPOTIFY_RATE_LIMIT_WINDOW") || "60000"),
+        // Warning settings
+        loginWarningInterval: configData.warnings?.login_warning_interval || parseInt(Deno.env.get("LOGIN_WARNING_INTERVAL") || "120000"),
+        loginWarningMaxCount: configData.warnings?.login_warning_max_count || parseInt(Deno.env.get("LOGIN_WARNING_MAX_COUNT") || "2"),
+        // Polling intervals
+        longPollingThreshold: configData.polling?.long_polling_threshold || parseInt(Deno.env.get("LONG_POLLING_THRESHOLD") || "30000"),
     };
 }
 

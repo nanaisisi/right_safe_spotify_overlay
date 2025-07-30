@@ -9,11 +9,19 @@
   <body>
     <div id="container">
       <div id="track-info">
-        <p id="track-name"></p>
-        <p id="artist-name"></p>
+        <div id="source-indicator">
+          <span id="source-name">未接続</span>
+        </div>
+        <p id="track-name">トラック情報を取得中...</p>
+        <p id="artist-name">アーティスト情報を取得中...</p>
       </div>
       <div id="controls">
-        <a href="/login" id="login-link">Login with Spotify</a>
+        <div id="login-section">
+          <button id="login-btn" onclick="handleLogin()" style="display: none">
+            🎵 Spotifyでログイン
+          </button>
+          <span id="login-status">認証状態を確認中...</span>
+        </div>
         <div id="obs-info">
           <p><strong>OBS用オーバーレイ:</strong></p>
           <a href="/overlay.html" target="_blank" class="obs-link"
@@ -23,7 +31,7 @@
             ※このURLをOBSのブラウザソースに追加してください
           </p>
         </div>
-        <div id="vlc-info" style="display: none">
+        <div id="vlc-info">
           <p><strong>VLC診断:</strong></p>
           <a href="/vlc-debug" target="_blank" class="vlc-link"
             >VLC接続テスト</a

@@ -19,3 +19,20 @@ password = "herepassword"                              # VLCのHTTPインター�
 exe_path = "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"
 auto_start = false                                     # 自動起動は推奨しません
 show_gui = true                                        # VLCのGUIを表示
+
+[timing]
+vlc_connection_timeout = 3000 # VLC接続タイムアウト (ミリ秒)
+vlc_init_delay = 5000         # VLC初期化待機時間 (ミリ秒)
+vlc_retry_delay = 2000        # VLC接続リトライ間隔 (ミリ秒)
+vlc_fallback_delay = 10000    # VLC停止からSpotifyフォールバックまでの時間 (ミリ秒)
+
+[api]
+spotify_api_limit = 30            # Spotify API 1分間の制限回数
+spotify_rate_limit_window = 60000 # Spotify API制限時間ウィンドウ (ミリ秒)
+
+[warnings]
+login_warning_interval = 120000 # ログイン警告の間隔 (ミリ秒)
+login_warning_max_count = 2     # ログイン警告の最大回数
+
+[polling]
+long_polling_threshold = 30000 # 長時間ポーリングに切り替える時間 (ミリ秒)
