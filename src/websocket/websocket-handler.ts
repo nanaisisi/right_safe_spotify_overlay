@@ -13,15 +13,21 @@ export class WebSocketManager {
     private currentPollingInterval = 5000; // Default start
     
     // Spotify用の間隔（API制限を考慮して長め）
-    private readonly spotifyShortInterval = 10000; // 10秒間隔
-    private readonly spotifyLongInterval = 60000;  // 60秒間隔
+    private readonly spotifyShortInterval: number;
+    private readonly spotifyLongInterval: number;
     // VLC用の間隔（ローカルAPIなので短め）
-    private readonly vlcShortInterval = 5000;  // 5秒間隔
-    private readonly vlcLongInterval = 10000;  // 10秒間隔
+    private readonly vlcShortInterval: number;
+    private readonly vlcLongInterval: number;
 
     constructor(unifiedPlayer: UnifiedPlayer, config: any) {
         this.unifiedPlayer = unifiedPlayer;
         this.config = config;
+        
+        // 設定ファイルからポーリング間隔を読み込み
+        this.spotifyShortInterval = config.spotifyShortInterval || 10000;
+        this.spotifyLongInterval = config.spotifyLongInterval || 30000;
+        this.vlcShortInterval = config.vlcShortInterval || 5000;
+        this.vlcLongInterval = config.vlcLongInterval || 10000;
         
         // Start the adaptive polling
         setTimeout(() => this.checkAndBroadcastTrack(), 1000); // Start after 1 second
@@ -58,9 +64,11 @@ export class WebSocketManager {
         const currentTrackId = nowPlaying ? `${nowPlaying.trackName}-${nowPlaying.artistName}-${nowPlaying.isPlaying}` : null;
         const lastTrackId = this.lastBroadcastTrack ? `${this.lastBroadcastTrack.trackName}-${this.lastBroadcastTrack.artistName}-${this.lastBroadcastTrack.isPlaying}` : null;
         
-        // 使用するポーリング間隔を決定（SpotifyとVLCで異なる間隔）
-        const shortInterval = this.config.vlcEnabled ? this.vlcShortInterval : this.spotifyShortInterval;
-        const longInterval = this.config.vlcEnabled ? this.vlcLongInterval : this.spotifyLongInterval;
+        // 実際に使用されているソースに基づいて間隔を決定
+        const currentSource = this.unifiedPlayer.currentSource;
+        const isUsingVLC = currentSource.includes("VLC") || currentSource === "VLC";
+        const shortInterval = isUsingVLC ? this.vlcShortInterval : this.spotifyShortInterval;
+        const longInterval = isUsingVLC ? this.vlcLongInterval : this.spotifyLongInterval;
         
         if (currentTrackId !== lastTrackId) {
             // Track changed - broadcast and reset polling to frequent mode
@@ -80,7 +88,7 @@ export class WebSocketManager {
             this.consecutiveNoChanges = 0;
             this.currentPollingInterval = shortInterval;
             
-            console.log(`Track updated (${this.unifiedPlayer.currentSource}): ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (polling: ${this.currentPollingInterval}ms)`);
+            console.log(`Track updated (${this.unifiedPlayer.currentSource}): ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (${isUsingVLC ? 'VLC' : 'Spotify'} polling: ${this.currentPollingInterval}ms)`);
         } else {
             // No change detected
             this.consecutiveNoChanges++;
@@ -89,7 +97,8 @@ export class WebSocketManager {
             // If no changes for more than configured threshold, switch to long interval
             if (timeSinceLastChange > this.config.longPollingThreshold && this.currentPollingInterval === shortInterval) {
                 this.currentPollingInterval = longInterval;
-                console.log(`Switching to long polling interval (${longInterval}ms) - no track changes for ${Math.round(timeSinceLastChange / 1000)}s`);
+                const sourceType = isUsingVLC ? 'VLC' : 'Spotify';
+                console.log(`Switching to long ${sourceType} polling interval (${longInterval}ms) - no track changes for ${Math.round(timeSinceLastChange / 1000)}s`);
             }
         }
         
