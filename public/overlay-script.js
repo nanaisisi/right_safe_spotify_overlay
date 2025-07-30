@@ -8,19 +8,34 @@ let currentTrack = null;
 let lastSource = "";
 
 ws.onopen = function () {
-  // WebSocket接続完了
+  console.log("WebSocket connected for OBS overlay");
 };
 
 ws.onmessage = function (event) {
-  console.log("Received WebSocket data:", event.data);
+  console.log("=== WebSocket Message Received ===");
+  console.log("Raw data:", event.data);
+  console.log("Data type:", typeof event.data);
+  console.log("Data length:", event.data.length);
+
+  if (event.data === "null") {
+    console.log("Received null data, showing no track");
+    showNoTrack();
+    return;
+  }
 
   try {
     const data = JSON.parse(event.data);
-    console.log("Parsed data:", data);
-    console.log("Source field:", data.source);
+    console.log("=== Parsed JSON Data ===");
+    console.log("Full data object:", data);
+    console.log("trackName:", data.trackName);
+    console.log("artistName:", data.artistName);
+    console.log("source:", data.source);
+    console.log("isPlaying:", data.isPlaying);
     updateTrackInfo(data);
   } catch (error) {
-    console.error("Error parsing WebSocket data:", error);
+    console.error("=== JSON Parse Error ===");
+    console.error("Error:", error);
+    console.error("Raw data that failed:", event.data);
     // JSONパースエラー時は何も表示しない
     showNoTrack();
   }
@@ -35,10 +50,23 @@ ws.onerror = function (error) {
 };
 
 function updateTrackInfo(data) {
+  console.log("=== updateTrackInfo called ===");
+  console.log("Input data:", data);
+  console.log("Has trackName:", !!data.trackName);
+  console.log("Has artistName:", !!data.artistName);
+
   if (!data || !data.trackName || !data.artistName) {
+    console.log("Missing required data, calling showNoTrack");
     showNoTrack();
     return;
   }
+
+  console.log(
+    "Processing track info for:",
+    data.trackName,
+    "by",
+    data.artistName
+  );
 
   // ソース表示を更新
   updateSourceDisplay(data);
@@ -55,8 +83,24 @@ function updateTrackInfo(data) {
 
   // 再生状態によって表示を調整
   const playingIndicator = data.isPlaying ? "♪ " : "⏸ ";
-  trackNameElement.textContent = playingIndicator + data.trackName;
-  artistNameElement.textContent = data.artistName;
+  const newTrackText = playingIndicator + data.trackName;
+  const newArtistText = data.artistName;
+
+  console.log("=== Updating DOM Elements ===");
+  console.log("Setting track text to:", newTrackText);
+  console.log("Setting artist text to:", newArtistText);
+
+  trackNameElement.textContent = newTrackText;
+  artistNameElement.textContent = newArtistText;
+
+  console.log(
+    "DOM updated - trackNameElement.textContent:",
+    trackNameElement.textContent
+  );
+  console.log(
+    "DOM updated - artistNameElement.textContent:",
+    artistNameElement.textContent
+  );
 
   // 再生状態によってスタイルを変更
   if (data.isPlaying) {
@@ -80,7 +124,10 @@ function showNoTrack() {
 
 // ソース表示の更新
 function updateSourceDisplay(data) {
-  console.log("updateSourceDisplay called with:", data);
+  console.log("=== updateSourceDisplay called ===");
+  console.log("Input data:", data);
+  console.log("data.source:", data.source);
+
   let sourceText = "不明";
   let sourceClass = "source-unknown";
 
@@ -88,13 +135,22 @@ function updateSourceDisplay(data) {
   if (data.source) {
     console.log("Found source field:", data.source);
     const source = data.source;
-    if (source.includes("VLC")) {
-      sourceText = "VLC";
-      sourceClass = "source-vlc";
-    } else if (source.includes("Spotify")) {
+
+    // より詳細なソース判定
+    if (source.includes("Spotify")) {
       sourceText = "Spotify";
       sourceClass = "source-spotify";
+      console.log("Detected as Spotify from source field");
+    } else if (source.includes("VLC")) {
+      sourceText = "VLC";
+      sourceClass = "source-vlc";
+      console.log("Detected as VLC from source field");
+    } else {
+      sourceText = "不明";
+      sourceClass = "source-unknown";
+      console.log("Unknown source type:", source);
     }
+
     console.log(
       "Set sourceText to:",
       sourceText,
@@ -103,46 +159,46 @@ function updateSourceDisplay(data) {
     );
   } else {
     console.log("No source field found, using fallback detection");
-    // フォールバック: トラック情報から推測
+    // フォールバック: トラック情報から推測（より保守的な判定）
     if (data.trackName && data.artistName) {
-      if (
-        data.trackName.includes(".") &&
-        (data.trackName.includes(".mp3") ||
-          data.trackName.includes(".flac") ||
-          data.trackName.includes(".wav"))
-      ) {
+      // 明確にファイル形式の場合のみVLC
+      if (data.trackName.match(/\.(mp3|flac|wav|m4a|aac|ogg)$/i)) {
         sourceText = "VLC";
         sourceClass = "source-vlc";
+        console.log("Detected as VLC from file extension");
       } else if (
-        data.artistName === "Unknown Artist" ||
+        data.artistName === "Unknown Artist" &&
         data.trackName === "Unknown Track"
       ) {
         sourceText = "VLC";
         sourceClass = "source-vlc";
+        console.log("Detected as VLC from unknown artist/track");
       } else {
+        // デフォルトはSpotify（通常のアーティスト名とトラック名）
         sourceText = "Spotify";
         sourceClass = "source-spotify";
+        console.log(
+          "Detected as Spotify by default (normal artist/track names)"
+        );
       }
+    } else {
+      console.log("Insufficient data for source detection");
     }
   }
 
   // ソース表示を更新（変更時のみ）
   if (lastSource !== sourceText) {
-    console.log(
-      "Updating source display:",
-      sourceText,
-      "with class:",
-      sourceClass
-    );
+    console.log("=== Updating Source Display ===");
+    console.log("Previous source:", lastSource);
+    console.log("New source:", sourceText, "with class:", sourceClass);
+
     sourceNameElement.textContent = sourceText;
     sourceNameElement.className = sourceClass;
     lastSource = sourceText;
-    console.log(
-      "Source element updated, textContent:",
-      sourceNameElement.textContent,
-      "className:",
-      sourceNameElement.className
-    );
+
+    console.log("Source element updated:");
+    console.log("- textContent:", sourceNameElement.textContent);
+    console.log("- className:", sourceNameElement.className);
   } else {
     console.log("Source unchanged, skipping update:", sourceText);
   }

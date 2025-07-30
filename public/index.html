@@ -8,6 +8,7 @@
   </head>
   <body>
     <div id="container">
+      <h1>Spotify Now Playing</h1>
       <div id="track-info">
         <div id="source-indicator">
           <span id="source-name">未接続</span>
@@ -20,7 +21,6 @@
           <button id="login-btn" onclick="handleLogin()">
             🎵 Spotifyでログイン
           </button>
-          <span id="login-status">認証状態を確認中...</span>
           <div id="login-url-info">
             <p><strong>SpotifyログインURL:</strong></p>
             <a href="/login" target="_blank" class="login-url">
@@ -64,6 +64,6 @@
         </div>
       </div>
     </div>
-    <script src="script.js"></script>
+    <script src="script.js" defer></script>
   </body>
 </html>

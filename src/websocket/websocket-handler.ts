@@ -38,14 +38,27 @@ export class WebSocketManager {
         this.connectedClients.add(socket);
         
         // Send current track info immediately to new client
-        if (this.lastBroadcastTrack && socket.readyState === WebSocket.OPEN) {
-            const messageData = {
-                ...this.lastBroadcastTrack,
-                source: this.unifiedPlayer.currentSource
-            };
-            socket.send(JSON.stringify(messageData));
-            console.log("Sent current track info to new client");
-        }
+        const sendCurrentTrack = async () => {
+            try {
+                const currentTrack = await this.unifiedPlayer.getCurrentlyPlaying();
+                const messageData = currentTrack ? {
+                    ...currentTrack,
+                    source: this.unifiedPlayer.currentSource
+                } : null;
+                
+                if (socket.readyState === WebSocket.OPEN) {
+                    const message = JSON.stringify(messageData);
+                    socket.send(message);
+                    console.log("Sent current track info to new client:", message);
+                }
+            } catch (error) {
+                console.error("Error sending current track to new client:", error);
+            }
+        };
+        
+        // Send immediately and also after a small delay
+        sendCurrentTrack();
+        setTimeout(sendCurrentTrack, 1000);
 
         socket.onclose = () => {
             console.log("WebSocket connection closed");
@@ -66,9 +79,17 @@ export class WebSocketManager {
         
         // 実際に使用されているソースに基づいて間隔を決定
         const currentSource = this.unifiedPlayer.currentSource;
-        const isUsingVLC = currentSource.includes("VLC") || currentSource === "VLC";
+        
+        // より正確なソース判定ロジック
+        const isUsingVLC = currentSource === "VLC" || 
+                          currentSource.includes("VLC (") ||
+                          (currentSource.includes("VLC") && !currentSource.includes("Spotify"));
+        
         const shortInterval = isUsingVLC ? this.vlcShortInterval : this.spotifyShortInterval;
         const longInterval = isUsingVLC ? this.vlcLongInterval : this.spotifyLongInterval;
+        
+        // ソース判定の詳細ログ
+        console.log(`Source detection: currentSource="${currentSource}", isUsingVLC=${isUsingVLC}, interval=${shortInterval}ms`);
         
         if (currentTrackId !== lastTrackId) {
             // Track changed - broadcast and reset polling to frequent mode
@@ -78,8 +99,10 @@ export class WebSocketManager {
             } : null;
             
             const message = JSON.stringify(messageData);
+            console.log("Broadcasting WebSocket message:", message);
             for (const client of this.connectedClients) {
                 if (client.readyState === WebSocket.OPEN) {
+                    console.log("Sending to WebSocket client");
                     client.send(message);
                 }
             }
@@ -88,7 +111,7 @@ export class WebSocketManager {
             this.consecutiveNoChanges = 0;
             this.currentPollingInterval = shortInterval;
             
-            console.log(`Track updated (${this.unifiedPlayer.currentSource}): ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (${isUsingVLC ? 'VLC' : 'Spotify'} polling: ${this.currentPollingInterval}ms)`);
+            console.log(`Track updated (${this.unifiedPlayer.currentSource}): ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (Source-based polling: ${this.currentPollingInterval}ms)`);
         } else {
             // No change detected
             this.consecutiveNoChanges++;
@@ -97,7 +120,7 @@ export class WebSocketManager {
             // If no changes for more than configured threshold, switch to long interval
             if (timeSinceLastChange > this.config.longPollingThreshold && this.currentPollingInterval === shortInterval) {
                 this.currentPollingInterval = longInterval;
-                const sourceType = isUsingVLC ? 'VLC' : 'Spotify';
+                const sourceType = isUsingVLC ? 'VLC-based' : 'Spotify-based';
                 console.log(`Switching to long ${sourceType} polling interval (${longInterval}ms) - no track changes for ${Math.round(timeSinceLastChange / 1000)}s`);
             }
         }
