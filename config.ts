@@ -11,6 +11,8 @@ export interface Config {
     vlcHost: string;
     vlcPort: number;
     vlcPassword: string;
+    vlcExePath: string;
+    vlcAutoStart: boolean;
 }
 
 // Simple .env file parser
@@ -63,6 +65,8 @@ export function loadConfig(): Config {
         vlcHost: Deno.env.get("VLC_HOST") || "localhost",
         vlcPort: parseInt(Deno.env.get("VLC_PORT") || "8080"),
         vlcPassword: Deno.env.get("VLC_PASSWORD") || "vlc",
+        vlcExePath: Deno.env.get("VLC_EXE_PATH") || "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe",
+        vlcAutoStart: Deno.env.get("VLC_AUTO_START") === "true",
     };
 }
 

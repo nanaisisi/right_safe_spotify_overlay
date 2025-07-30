@@ -7,6 +7,71 @@ import { loadConfig, validateConfig } from "../config.ts";
 const config = loadConfig();
 validateConfig(config);
 
+// VLC process management
+let vlcProcess: Deno.ChildProcess | null = null;
+
+// Start VLC if auto-start is enabled
+if (config.vlcEnabled && config.vlcAutoStart) {
+    startVLC();
+}
+
+async function startVLC() {
+    if (vlcProcess) {
+        console.log("VLC is already running");
+        return;
+    }
+
+    try {
+        console.log(`Starting VLC (${config.vlcExePath}) with web interface...`);
+        const command = new Deno.Command(config.vlcExePath, {
+            args: [
+                "--intf", "http",
+                "--http-password", config.vlcPassword,
+                "--http-port", config.vlcPort.toString(),
+                "--http-host", config.vlcHost
+            ],
+            stdout: "piped",
+            stderr: "piped"
+        });
+        
+        vlcProcess = command.spawn();
+        
+        console.log(`✓ VLC started with PID: ${vlcProcess.pid}`);
+        
+        // Wait a moment for VLC to initialize
+        await delay(3000);
+        
+        // Check if VLC web interface is accessible
+        await checkVLCWebInterface();
+        
+    } catch (error) {
+        console.error("Failed to start VLC:", error);
+        vlcProcess = null;
+    }
+}
+
+async function checkVLCWebInterface() {
+    try {
+        const response = await fetch(`http://${config.vlcHost}:${config.vlcPort}/requests/status.json`, {
+            headers: {
+                'Authorization': 'Basic ' + btoa(':' + config.vlcPassword)
+            }
+        });
+        
+        if (response.ok) {
+            console.log("✓ VLC web interface is accessible");
+        } else {
+            console.error("✗ VLC web interface returned error:", response.status);
+        }
+    } catch (error) {
+        console.error("✗ Cannot access VLC web interface:", error.message);
+    }
+}
+
+function delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
 let tokenExpiresAt: number | null = null;
@@ -127,8 +192,6 @@ async function getCurrentlyPlayingVLC() {
         const auth = btoa(`:${config.vlcPassword}`);
         const vlcUrl = `http://${config.vlcHost}:${config.vlcPort}/requests/status.json`;
         
-        console.log(`Attempting to connect to VLC at: ${vlcUrl}`);
-        
         const res = await fetch(vlcUrl, {
             headers: {
                 "Authorization": `Basic ${auth}`,
@@ -137,24 +200,18 @@ async function getCurrentlyPlayingVLC() {
 
         if (!res.ok) {
             if (res.status === 404) {
-                console.error(`VLC Web Interface not found (404). Please check:`);
-                console.error(`1. VLC HTTP interface is enabled`);
-                console.error(`2. VLC is running`);
-                console.error(`3. Port ${config.vlcPort} is correct`);
-                console.error(`4. Try accessing http://${config.vlcHost}:${config.vlcPort} in your browser`);
+                console.error(`✗ VLC Web Interface not found (404). Check if VLC HTTP interface is enabled.`);
             } else if (res.status === 401) {
-                console.error(`VLC authentication failed (401). Please check your VLC_PASSWORD setting.`);
+                console.error(`✗ VLC authentication failed (401). Check VLC_PASSWORD setting.`);
             } else {
-                console.error(`VLC API error: ${res.status} - ${res.statusText}`);
+                console.error(`✗ VLC API error: ${res.status}`);
             }
             return lastTrackInfo;
         }
 
         const data = await res.json();
-        console.log("VLC response received:", JSON.stringify(data, null, 2));
         
         if (!data.information || !data.information.category || !data.information.category.meta) {
-            console.log("No media playing or no metadata available");
             lastTrackInfo = null;
             return null;
         }
@@ -171,16 +228,10 @@ async function getCurrentlyPlayingVLC() {
             durationMs: Math.floor((data.length || 0) * 1000),
         };
 
-        console.log("VLC track info extracted:", trackInfo);
         lastTrackInfo = trackInfo;
         return trackInfo;
     } catch (error) {
-        console.error("Error fetching VLC status:", error);
-        console.error("Please ensure:");
-        console.error("1. VLC is running");
-        console.error("2. HTTP interface is enabled in VLC settings");
-        console.error("3. VLC_HOST and VLC_PORT are correct");
-        console.error("4. VLC_PASSWORD matches the password set in VLC");
+        console.error("✗ VLC connection error:", error.message);
         return lastTrackInfo;
     }
 }
@@ -464,12 +515,37 @@ serve(async (req) => {
     });
 }, { port: config.port });
 
+// Graceful shutdown
+function gracefulShutdown() {
+    if (vlcProcess) {
+        console.log("Terminating VLC process...");
+        try {
+            vlcProcess.kill("SIGTERM");
+        } catch (error) {
+            console.error("Error terminating VLC process:", error);
+        }
+        vlcProcess = null;
+    }
+    console.log("Server shutting down...");
+    Deno.exit(0);
+}
+
+// Handle shutdown signals (Windows compatible)
+Deno.addSignalListener("SIGINT", gracefulShutdown);  // Ctrl+C
+if (Deno.build.os !== "windows") {
+    // SIGTERM is not supported on Windows
+    Deno.addSignalListener("SIGTERM", gracefulShutdown);
+}
+
 console.log(`Spotify Overlay Server is running on:`);
 console.log(`  - Local:   http://127.0.0.1:${config.port}/`);
 console.log(`  - Network: http://localhost:${config.port}/`);
 console.log(`\nMedia Source: ${config.vlcEnabled ? 'VLC Media Player' : 'Spotify'}`);
 if (config.vlcEnabled) {
     console.log(`VLC Connection: http://${config.vlcHost}:${config.vlcPort}/`);
+    if (config.vlcAutoStart) {
+        console.log(`VLC Auto-start: Enabled (${config.vlcExePath})`);
+    }
 }
 console.log(`\nTo get started:`);
 console.log(`  1. Open http://127.0.0.1:${config.port}/ in your browser`);

@@ -108,6 +108,10 @@ VLC_HOST=localhost
 VLC_PORT=8080
 VLC_PASSWORD=vlc
 
+# VLC 自動起動設定（オプション）
+VLC_EXE_PATH=C:\Program Files\VideoLAN\VLC\vlc.exe
+VLC_AUTO_START=true
+
 # サーバー設定
 PORT=8081
 POLLING_INTERVAL=10000
@@ -117,11 +121,29 @@ SPOTIFY_CLIENT_ID=
 SPOTIFY_CLIENT_SECRET=
 ```
 
-### 3. 実行
+**VLC 自動起動機能:**
+
+`VLC_AUTO_START=true` を設定すると、アプリケーション起動時に自動的に VLC が以下のコマンドで起動されます：
 
 ```bash
-deno run --allow-net --allow-env --allow-read src/main.ts
+vlc --intf http --http-password [設定したパスワード] --http-port [設定したポート] --http-host [設定したホスト]
 ```
+
+この機能により、VLC の Web インターフェースを手動で設定する必要がなくなります。
+
+### 3. 実行
+
+**通常の実行:**
+
+```bash
+deno run --allow-net --allow-env --allow-read --allow-run src/main.ts
+```
+
+**便利なバッチファイル:**
+
+- `start-spotify.bat` - Spotify モードで起動
+- `start-vlc.bat` - VLC モード（手動設定）で起動
+- `start-vlc-auto.bat` - VLC モード（自動起動）で起動
 
 ## 使用方法
 
