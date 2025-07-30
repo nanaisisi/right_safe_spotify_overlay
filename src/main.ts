@@ -125,28 +125,43 @@ async function getCurrentlyPlayingVLC() {
 
     try {
         const auth = btoa(`:${config.vlcPassword}`);
-        const res = await fetch(`http://${config.vlcHost}:${config.vlcPort}/requests/status.json`, {
+        const vlcUrl = `http://${config.vlcHost}:${config.vlcPort}/requests/status.json`;
+        
+        console.log(`Attempting to connect to VLC at: ${vlcUrl}`);
+        
+        const res = await fetch(vlcUrl, {
             headers: {
                 "Authorization": `Basic ${auth}`,
             },
         });
 
         if (!res.ok) {
-            console.error(`VLC API error: ${res.status} - ${res.statusText}`);
+            if (res.status === 404) {
+                console.error(`VLC Web Interface not found (404). Please check:`);
+                console.error(`1. VLC HTTP interface is enabled`);
+                console.error(`2. VLC is running`);
+                console.error(`3. Port ${config.vlcPort} is correct`);
+                console.error(`4. Try accessing http://${config.vlcHost}:${config.vlcPort} in your browser`);
+            } else if (res.status === 401) {
+                console.error(`VLC authentication failed (401). Please check your VLC_PASSWORD setting.`);
+            } else {
+                console.error(`VLC API error: ${res.status} - ${res.statusText}`);
+            }
             return lastTrackInfo;
         }
 
         const data = await res.json();
+        console.log("VLC response received:", JSON.stringify(data, null, 2));
         
         if (!data.information || !data.information.category || !data.information.category.meta) {
-            // No media playing or no metadata
+            console.log("No media playing or no metadata available");
             lastTrackInfo = null;
             return null;
         }
 
         const meta = data.information.category.meta;
         const trackName = meta.title || meta.filename || "Unknown Track";
-        const artistName = meta.artist || "Unknown Artist";
+        const artistName = meta.artist || meta.album || "Unknown Artist";
         
         const trackInfo = {
             trackName: trackName,
@@ -156,10 +171,16 @@ async function getCurrentlyPlayingVLC() {
             durationMs: Math.floor((data.length || 0) * 1000),
         };
 
+        console.log("VLC track info extracted:", trackInfo);
         lastTrackInfo = trackInfo;
         return trackInfo;
     } catch (error) {
         console.error("Error fetching VLC status:", error);
+        console.error("Please ensure:");
+        console.error("1. VLC is running");
+        console.error("2. HTTP interface is enabled in VLC settings");
+        console.error("3. VLC_HOST and VLC_PORT are correct");
+        console.error("4. VLC_PASSWORD matches the password set in VLC");
         return lastTrackInfo;
     }
 }
@@ -295,6 +316,83 @@ serve(async (req) => {
         return response;
     }
 
+    if (url.pathname === "/vlc-debug") {
+        if (!config.vlcEnabled) {
+            return new Response("VLC mode is not enabled. Set VLC_ENABLED=true in .env", 
+                { status: 400 });
+        }
+
+        let debugInfo = `VLC Debug Information\n=====================\n\n`;
+        debugInfo += `Configuration:\n`;
+        debugInfo += `- Host: ${config.vlcHost}\n`;
+        debugInfo += `- Port: ${config.vlcPort}\n`;
+        debugInfo += `- Password: ${config.vlcPassword ? '[SET]' : '[NOT SET]'}\n\n`;
+
+        try {
+            const auth = btoa(`:${config.vlcPassword}`);
+            const testUrl = `http://${config.vlcHost}:${config.vlcPort}/requests/status.json`;
+            debugInfo += `Testing connection to: ${testUrl}\n\n`;
+
+            const res = await fetch(testUrl, {
+                headers: {
+                    "Authorization": `Basic ${auth}`,
+                },
+            });
+
+            debugInfo += `Response Status: ${res.status} ${res.statusText}\n`;
+            debugInfo += `Response Headers:\n`;
+            for (const [key, value] of res.headers.entries()) {
+                debugInfo += `  ${key}: ${value}\n`;
+            }
+
+            if (res.ok) {
+                const data = await res.json();
+                debugInfo += `\nResponse Data:\n`;
+                debugInfo += `- State: ${data.state || 'unknown'}\n`;
+                debugInfo += `- Position: ${data.position || 'unknown'}\n`;
+                debugInfo += `- Time: ${data.time || 'unknown'}\n`;
+                debugInfo += `- Length: ${data.length || 'unknown'}\n`;
+                
+                if (data.information) {
+                    debugInfo += `- Information available: Yes\n`;
+                    if (data.information.category && data.information.category.meta) {
+                        const meta = data.information.category.meta;
+                        debugInfo += `- Title: ${meta.title || 'Not available'}\n`;
+                        debugInfo += `- Artist: ${meta.artist || 'Not available'}\n`;
+                        debugInfo += `- Filename: ${meta.filename || 'Not available'}\n`;
+                    } else {
+                        debugInfo += `- Metadata: Not available\n`;
+                    }
+                } else {
+                    debugInfo += `- Information available: No\n`;
+                }
+            } else {
+                debugInfo += `\nError Details:\n`;
+                const errorText = await res.text();
+                debugInfo += errorText;
+                
+                if (res.status === 401) {
+                    debugInfo += `\n\nTroubleshooting for 401 Unauthorized:\n`;
+                    debugInfo += `1. Check if VLC Web Interface password is set\n`;
+                    debugInfo += `2. VLC Settings: Interface > Main interfaces > Lua > Lua HTTP > Password\n`;
+                    debugInfo += `3. Or start VLC with: vlc --intf http --http-password vlc --http-port 8080\n`;
+                } else if (res.status === 404) {
+                    debugInfo += `\n\nTroubleshooting for 404 Not Found:\n`;
+                    debugInfo += `1. Make sure VLC Web Interface is enabled\n`;
+                    debugInfo += `2. Check "WEB" in Interface > Main interfaces\n`;
+                    debugInfo += `3. Restart VLC completely\n`;
+                }
+            }
+
+        } catch (error) {
+            debugInfo += `\nConnection Error:\n${error.message}\n`;
+        }
+
+        return new Response(debugInfo, {
+            headers: { "Content-Type": "text/plain" }
+        });
+    }
+
     if (url.pathname === "/favicon.ico") {
         // Return a simple 16x16 transparent PNG favicon
         const favicon = new Uint8Array([
@@ -312,6 +410,50 @@ serve(async (req) => {
                 "Cache-Control": "public, max-age=86400"
             }
         });
+    }
+
+    if (url.pathname === "/vlc-test" && config.vlcEnabled) {
+        // VLC diagnostic endpoint
+        try {
+            const auth = btoa(`:${config.vlcPassword}`);
+            const vlcUrl = `http://${config.vlcHost}:${config.vlcPort}/requests/status.json`;
+            
+            const res = await fetch(vlcUrl, {
+                headers: {
+                    "Authorization": `Basic ${auth}`,
+                },
+            });
+
+            const diagnostic = {
+                vlcUrl: vlcUrl,
+                status: res.status,
+                statusText: res.statusText,
+                ok: res.ok,
+                data: res.ok ? await res.json() : null,
+                config: {
+                    vlcEnabled: config.vlcEnabled,
+                    vlcHost: config.vlcHost,
+                    vlcPort: config.vlcPort,
+                    vlcPassword: config.vlcPassword ? "***" : "NOT SET"
+                }
+            };
+
+            return new Response(JSON.stringify(diagnostic, null, 2), {
+                headers: { "Content-Type": "application/json" }
+            });
+        } catch (error) {
+            return new Response(JSON.stringify({
+                error: error.message,
+                config: {
+                    vlcEnabled: config.vlcEnabled,
+                    vlcHost: config.vlcHost,
+                    vlcPort: config.vlcPort,
+                    vlcPassword: config.vlcPassword ? "***" : "NOT SET"
+                }
+            }, null, 2), {
+                headers: { "Content-Type": "application/json" }
+            });
+        }
     }
 
     return serveDir(req, {

@@ -33,9 +33,14 @@ echo.
 echo Make sure VLC Web Interface is enabled:
 echo 1. Open VLC
 echo 2. Tools ^> Preferences ^> Interface ^> Main interfaces
-echo 3. Check "Web"
-echo 4. Set HTTP password to "vlc"
-echo 5. Restart VLC
+echo 3. Set "Settings show" to "All"
+echo 4. Check "WEB"
+echo 5. Go to Interface ^> Main interfaces ^> Lua ^> Lua HTTP
+echo 6. Set password to "vlc"
+echo 7. Restart VLC
+echo.
+echo Alternative: Start VLC with command line:
+echo vlc --intf http --http-password vlc --http-port 8080
 echo.
 echo Starting server...
 deno run --allow-net --allow-env --allow-read src/main.ts

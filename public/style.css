@@ -123,3 +123,41 @@ body {
   font-style: italic;
   margin-top: 5px !important;
 }
+
+#vlc-info {
+  background-color: rgba(255, 165, 0, 0.15);
+  padding: 12px;
+  border-radius: 6px;
+  margin: 10px 0;
+  border: 1px solid rgba(255, 165, 0, 0.3);
+}
+
+#vlc-info p {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+.vlc-link {
+  display: block;
+  background-color: #ff6600;
+  color: white !important;
+  text-decoration: none;
+  padding: 8px 15px;
+  border-radius: 5px;
+  font-family: monospace;
+  font-size: 13px;
+  margin: 8px 0;
+  transition: background-color 0.3s;
+}
+
+.vlc-link:hover {
+  background-color: #ff8533;
+  text-decoration: none !important;
+}
+
+.vlc-note {
+  font-size: 12px !important;
+  color: #aaa !important;
+  font-style: italic;
+  margin-top: 5px !important;
+}
