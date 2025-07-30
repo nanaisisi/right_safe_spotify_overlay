@@ -11,7 +11,7 @@ echo 3. Click "Show settings: All" (bottom left)
 echo 4. Navigate to: Interface > Main interfaces
 echo 5. Check the "Web" checkbox
 echo 6. Navigate to: Interface > Main interfaces > Lua > Lua HTTP
-echo 7. Set password to: doragon
+echo 7. Set password to: [YOUR_SECURE_PASSWORD]
 echo 8. Restart VLC
 echo.
 echo After setup, VLC HTTP interface will be accessible at:

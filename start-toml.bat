@@ -3,8 +3,8 @@ echo Starting Spotify Overlay with TOML Configuration...
 echo.
 echo Configuration priority:
 echo 1. config.toml (recommended)
-echo 2. .env file (fallback)
-echo 3. System environment variables (fallback)
+echo 2. config_example.toml (fallback)
+echo 3. Default values
 echo.
 
 REM Check if config.toml exists

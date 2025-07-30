@@ -244,7 +244,7 @@ async function getCurrentlyPlayingVLC() {
                 if (res.status === 404) {
                     console.error(`✗ VLC Web Interface not found. Please enable HTTP interface in VLC.`);
                 } else if (res.status === 401) {
-                    console.error(`✗ VLC authentication failed. Check VLC_PASSWORD setting.`);
+                    console.error(`✗ VLC authentication failed. Check vlc.password setting in config.toml.`);
                 }
             }
             return lastTrackInfo;
@@ -507,7 +507,7 @@ serve(async (req) => {
 
     if (url.pathname === "/vlc-debug") {
         if (!config.vlcEnabled) {
-            return new Response("VLC mode is not enabled. Set VLC_ENABLED=true in .env", 
+            return new Response("VLC mode is not enabled. Set vlc.enabled=true in config.toml", 
                 { status: 400 });
         }
 

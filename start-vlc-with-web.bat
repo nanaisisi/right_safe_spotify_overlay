@@ -1,4 +1,8 @@
 @echo off
+REM ================================================================
+REM Windows専用 - VLC Web Interface起動スクリプト  
+REM Windows only - VLC Web Interface startup script
+REM ================================================================
 echo Starting VLC with Web Interface enabled...
 
 rem VLCのパスを検索
@@ -14,13 +18,18 @@ if exist "C:\Program Files\VideoLAN\VLC\vlc.exe" (
     exit /b
 )
 
+REM VLC HTTP interface settings
+set VLC_HTTP_PORT=8080
+set VLC_HTTP_HOST=localhost
+set /p VLC_HTTP_PASSWORD=Enter VLC HTTP password: 
+
 echo Starting VLC with Web Interface...
-echo - Host: localhost
-echo - Port: 8080  
-echo - Password: vlc
+echo - Host: %VLC_HTTP_HOST%
+echo - Port: %VLC_HTTP_PORT%
+echo - Password: [HIDDEN]
 echo.
 
-start "" %VLC_PATH% --intf http --http-password vlc --http-port 8080
+start "" %VLC_PATH% --intf http --http-password %VLC_HTTP_PASSWORD% --http-port %VLC_HTTP_PORT% --http-host %VLC_HTTP_HOST%
 
 echo VLC started with Web Interface enabled.
 echo You can now access it at: http://localhost:8080
