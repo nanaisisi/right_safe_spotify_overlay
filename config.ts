@@ -6,6 +6,11 @@ export interface Config {
     redirectUri: string;
     port: number;
     pollingInterval: number;
+    // VLC settings
+    vlcEnabled: boolean;
+    vlcHost: string;
+    vlcPort: number;
+    vlcPassword: string;
 }
 
 // Simple .env file parser
@@ -53,6 +58,11 @@ export function loadConfig(): Config {
         redirectUri: Deno.env.get("REDIRECT_URI") || `http://127.0.0.1:${port}/callback`,
         port: port,
         pollingInterval: parseInt(Deno.env.get("POLLING_INTERVAL") || "3000"),
+        // VLC settings
+        vlcEnabled: Deno.env.get("VLC_ENABLED") === "true",
+        vlcHost: Deno.env.get("VLC_HOST") || "localhost",
+        vlcPort: parseInt(Deno.env.get("VLC_PORT") || "8080"),
+        vlcPassword: Deno.env.get("VLC_PASSWORD") || "vlc",
     };
 }
 

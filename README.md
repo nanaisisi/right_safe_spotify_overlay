@@ -1,27 +1,66 @@
-# Spotify Overlay Application
+# Media Overlay Application
 
-Spotify で現在再生中の楽曲を表示する Web アプリケーションです。
+Spotify または VLC Media Player で現在再生中の楽曲を表示する Web アプリケーションです。
 
 ## セットアップ
 
-### 1. Spotify アプリケーションの作成
+### Spotify モード
+
+#### 1. Spotify アプリケーションの作成
 
 1. [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) にアクセス
 2. 新しいアプリケーションを作成
 3. Client ID と Client Secret を取得
 4. Redirect URI に `http://127.0.0.1:8081/callback` を追加
 
+### VLC モード
+
+#### 1. VLC Web インターフェースの有効化
+
+1. VLC を起動
+2. `ツール` → `設定` → `インターフェース` → `メインインターフェース`
+3. `Web` にチェックを入れる
+4. `HTTP パスワード` を設定（例：vlc）
+5. VLC を再起動
+
+#### 2. 接続テスト
+
+ブラウザで `http://localhost:8080` にアクセスして、VLC Web インターフェースが表示されることを確認してください。
+
 ### 2. 環境変数の設定
 
 `.env.example` ファイルをコピーして `.env` ファイルを作成し、適切な値を設定してください：
 
+#### Spotify モードの場合：
+
 ```bash
-# .env ファイル
+# Spotify 設定
 SPOTIFY_CLIENT_ID=あなたのSpotifyクライアントID
 SPOTIFY_CLIENT_SECRET=あなたのSpotifyクライアントシークレット
+VLC_ENABLED=false
+
+# サーバー設定
 PORT=8081
 REDIRECT_URI=http://127.0.0.1:8081/callback
-POLLING_INTERVAL=3000
+POLLING_INTERVAL=10000
+```
+
+#### VLC モードの場合：
+
+```bash
+# VLC 設定
+VLC_ENABLED=true
+VLC_HOST=localhost
+VLC_PORT=8080
+VLC_PASSWORD=vlc
+
+# サーバー設定
+PORT=8081
+POLLING_INTERVAL=10000
+
+# Spotify設定（VLCモードでは不要）
+SPOTIFY_CLIENT_ID=
+SPOTIFY_CLIENT_SECRET=
 ```
 
 ### 3. 実行
@@ -32,20 +71,47 @@ deno run --allow-net --allow-env --allow-read src/main.ts
 
 ## 使用方法
 
+### Spotify モード
+
 1. アプリケーションを起動
 2. ブラウザで `http://127.0.0.1:8081` にアクセス
 3. `/login` エンドポイントで Spotify にログイン
 4. WebSocket を使用してリアルタイムで現在再生中の楽曲情報を取得
 
+### VLC モード
+
+1. VLC で動画/音楽ファイルを再生
+2. アプリケーションを起動
+3. ブラウザで `http://127.0.0.1:8081` にアクセス
+4. 自動的に VLC の再生情報を取得・表示
+
 ## 設定可能な環境変数
+
+### 共通設定
+
+| 変数名             | 説明                         | デフォルト値 |
+| ------------------ | ---------------------------- | ------------ |
+| `PORT`             | サーバーのポート番号         | 8081         |
+| `POLLING_INTERVAL` | 楽曲情報の更新間隔（ミリ秒） | 10000        |
+
+### Spotify モード設定
 
 | 変数名                  | 説明                                 | デフォルト値                     |
 | ----------------------- | ------------------------------------ | -------------------------------- |
 | `SPOTIFY_CLIENT_ID`     | Spotify API クライアント ID          | 必須                             |
 | `SPOTIFY_CLIENT_SECRET` | Spotify API クライアントシークレット | 必須                             |
-| `PORT`                  | サーバーのポート番号                 | 8081                             |
 | `REDIRECT_URI`          | OAuth リダイレクト URI               | http://127.0.0.1:{PORT}/callback |
-| `POLLING_INTERVAL`      | 楽曲情報の更新間隔（ミリ秒）         | 10000 (推奨: 10000-15000)        |
+
+### VLC モード設定
+
+| 変数名             | 説明                                 | デフォルト値                     |
+| ------------------ | ------------------------------------ | -------------------------------- |
+| `VLC_ENABLED`      | VLC モードの有効化                   | false                            |
+| `VLC_HOST`         | VLC Web インターフェースのホスト     | localhost                        |
+| `VLC_PORT`         | VLC Web インターフェースのポート     | 8080                             |
+| `VLC_PASSWORD`     | VLC Web インターフェースのパスワード | vlc                              |
+| `REDIRECT_URI`     | OAuth リダイレクト URI               | http://127.0.0.1:{PORT}/callback |
+| `POLLING_INTERVAL` | 楽曲情報の更新間隔（ミリ秒）         | 10000 (推奨: 10000-15000)        |
 
 ## 適応的ポーリングシステム
 

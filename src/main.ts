@@ -117,6 +117,62 @@ async function getCurrentlyPlaying() {
     return trackInfo;
 }
 
+// VLC Media Player integration
+async function getCurrentlyPlayingVLC() {
+    if (!config.vlcEnabled) {
+        return null;
+    }
+
+    try {
+        const auth = btoa(`:${config.vlcPassword}`);
+        const res = await fetch(`http://${config.vlcHost}:${config.vlcPort}/requests/status.json`, {
+            headers: {
+                "Authorization": `Basic ${auth}`,
+            },
+        });
+
+        if (!res.ok) {
+            console.error(`VLC API error: ${res.status} - ${res.statusText}`);
+            return lastTrackInfo;
+        }
+
+        const data = await res.json();
+        
+        if (!data.information || !data.information.category || !data.information.category.meta) {
+            // No media playing or no metadata
+            lastTrackInfo = null;
+            return null;
+        }
+
+        const meta = data.information.category.meta;
+        const trackName = meta.title || meta.filename || "Unknown Track";
+        const artistName = meta.artist || "Unknown Artist";
+        
+        const trackInfo = {
+            trackName: trackName,
+            artistName: artistName,
+            isPlaying: data.state === "playing",
+            progressMs: Math.floor((data.time || 0) * 1000),
+            durationMs: Math.floor((data.length || 0) * 1000),
+        };
+
+        lastTrackInfo = trackInfo;
+        return trackInfo;
+    } catch (error) {
+        console.error("Error fetching VLC status:", error);
+        return lastTrackInfo;
+    }
+}
+
+// Unified function to get currently playing from either Spotify or VLC
+async function getCurrentlyPlayingUnified() {
+    if (config.vlcEnabled) {
+        return await getCurrentlyPlayingVLC();
+    } else {
+        return await getCurrentlyPlaying();
+    }
+}
+
 // Adaptive polling system for currently playing song
 let lastBroadcastTrack: any = null;
 let lastTrackChangeTime = Date.now();
@@ -126,7 +182,7 @@ const shortInterval = 10000; // 10 seconds for frequent checks
 const longInterval = 60000;  // 60 seconds for infrequent checks
 
 async function checkAndBroadcastTrack() {
-    const nowPlaying = await getCurrentlyPlaying();
+    const nowPlaying = await getCurrentlyPlayingUnified();
     
     // Only broadcast if track changed or if it's the first time
     const currentTrackId = nowPlaying ? `${nowPlaying.trackName}-${nowPlaying.artistName}-${nowPlaying.isPlaying}` : null;
@@ -144,7 +200,8 @@ async function checkAndBroadcastTrack() {
         lastTrackChangeTime = Date.now();
         consecutiveNoChanges = 0;
         currentPollingInterval = shortInterval;
-        console.log(`Track updated: ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (polling: ${currentPollingInterval}ms)`);
+        const source = config.vlcEnabled ? "VLC" : "Spotify";
+        console.log(`Track updated (${source}): ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (polling: ${currentPollingInterval}ms)`);
     } else {
         // No change detected
         consecutiveNoChanges++;
@@ -268,6 +325,14 @@ serve(async (req) => {
 console.log(`Spotify Overlay Server is running on:`);
 console.log(`  - Local:   http://127.0.0.1:${config.port}/`);
 console.log(`  - Network: http://localhost:${config.port}/`);
+console.log(`\nMedia Source: ${config.vlcEnabled ? 'VLC Media Player' : 'Spotify'}`);
+if (config.vlcEnabled) {
+    console.log(`VLC Connection: http://${config.vlcHost}:${config.vlcPort}/`);
+}
 console.log(`\nTo get started:`);
 console.log(`  1. Open http://127.0.0.1:${config.port}/ in your browser`);
-console.log(`  2. Go to http://127.0.0.1:${config.port}/login to authenticate with Spotify`);
+if (!config.vlcEnabled) {
+    console.log(`  2. Go to http://127.0.0.1:${config.port}/login to authenticate with Spotify`);
+} else {
+    console.log(`  2. Make sure VLC Web Interface is enabled (Preferences > Interface > Main interfaces > Web)`);
+}
