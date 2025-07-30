@@ -4,18 +4,18 @@
 [server]
 port = 8081
 redirect_uri = "http://127.0.0.1:8081/callback"
-polling_interval = 5000  # VLC用に最適化 (5秒間隔)
+polling_interval = 5000                         # SpotifyとVLC併用時の推奨間隔 (5秒間隔)
 
 [spotify]
 # Spotify Developer Dashboard (https://developer.spotify.com/dashboard) から取得
-client_id = ""  # あなたのSpotifyクライアントID
-client_secret = ""  # あなたのSpotifyクライアントシークレット
+client_id = ""     # あなたのSpotifyクライアントID
+client_secret = "" # あなたのSpotifyクライアントシークレット
 
 [vlc]
-enabled = true  # VLCを使用する場合はtrue、Spotifyのみの場合はfalse
+enabled = true                                         # SpotifyとVLCを併用する場合はtrue
 host = "127.0.0.1"
 port = 8080
-password = "herepassword"  # VLCのHTTPインターフェースパスワードを入力
+password = "herepassword"                              # VLCのHTTPインターフェースパスワードを入力
 exe_path = "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"
-auto_start = false  # 自動起動は推奨しません
-show_gui = true  # VLCのGUIを表示
+auto_start = false                                     # 自動起動は推奨しません
+show_gui = true                                        # VLCのGUIを表示

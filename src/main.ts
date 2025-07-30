@@ -285,8 +285,13 @@ async function getCurrentlyPlayingVLC() {
 // Unified function to get currently playing from either Spotify or VLC
 async function getCurrentlyPlayingUnified() {
     if (config.vlcEnabled) {
-        // VLC優先 - VLCが有効な場合はSpotifyからの取得を停止
-        return await getCurrentlyPlayingVLC();
+        // VLC併用 - VLCからの取得を優先し、失敗時はSpotifyにフォールバック
+        const vlcTrack = await getCurrentlyPlayingVLC();
+        if (vlcTrack) {
+            return vlcTrack;
+        }
+        // VLCで取得できない場合はSpotifyを試す
+        return await getCurrentlyPlaying();
     } else {
         return await getCurrentlyPlaying();
     }
@@ -327,7 +332,7 @@ async function checkAndBroadcastTrack() {
         lastTrackChangeTime = Date.now();
         consecutiveNoChanges = 0;
         currentPollingInterval = shortInterval;
-        const source = config.vlcEnabled ? "VLC" : "Spotify";
+        const source = config.vlcEnabled ? "VLC/Spotify" : "Spotify";
         console.log(`Track updated (${source}): ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (polling: ${currentPollingInterval}ms)`);
     } else {
         // No change detected
@@ -599,9 +604,10 @@ if (Deno.build.os !== "windows") {
 console.log(`Spotify Overlay Server is running on:`);
 console.log(`  - Local:   http://127.0.0.1:${config.port}/`);
 console.log(`  - Network: http://localhost:${config.port}/`);
-console.log(`\nMedia Source: ${config.vlcEnabled ? 'VLC Media Player' : 'Spotify'}`);
+console.log(`\nMedia Source: ${config.vlcEnabled ? 'VLC Media Player (with Spotify fallback)' : 'Spotify'}`);
 if (config.vlcEnabled) {
     console.log(`VLC Connection: http://${config.vlcHost}:${config.vlcPort}/`);
+    console.log(`Fallback: Spotify Web API`);
     if (config.vlcAutoStart) {
         console.log(`VLC Auto-start: Enabled (${config.vlcExePath})`);
     }
