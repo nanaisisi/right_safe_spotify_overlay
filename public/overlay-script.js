@@ -8,7 +8,7 @@ let currentTrack = null;
 let lastSource = "";
 
 ws.onopen = function () {
-  console.log("WebSocket connected for OBS overlay");
+  // WebSocket接続完了
 };
 
 ws.onmessage = function (event) {
@@ -16,17 +16,16 @@ ws.onmessage = function (event) {
     const data = JSON.parse(event.data);
     updateTrackInfo(data);
   } catch (error) {
-    console.error("Error parsing WebSocket data:", error);
+    // JSONパースエラー時は何も表示しない
+    showNoTrack();
   }
 };
 
 ws.onclose = function () {
-  console.log("WebSocket disconnected");
   showNoTrack();
 };
 
 ws.onerror = function (error) {
-  console.error("WebSocket error:", error);
   showNoTrack();
 };
 
@@ -118,6 +117,5 @@ function updateSourceDisplay(data) {
     sourceNameElement.textContent = sourceText;
     sourceNameElement.className = sourceClass;
     lastSource = sourceText;
-    console.log(`Source changed to: ${sourceText}`);
   }
 }

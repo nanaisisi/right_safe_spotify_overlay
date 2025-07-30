@@ -404,7 +404,6 @@ async function checkAndBroadcastTrack() {
         currentPollingInterval = shortInterval;
         
         console.log(`Track updated (${lastUsedSource}): ${nowPlaying ? `${nowPlaying.trackName} by ${nowPlaying.artistName}` : 'No track playing'} (polling: ${currentPollingInterval}ms)`);
-        console.log(`Broadcasting message:`, JSON.stringify(messageData));
     } else {
         // No change detected
         consecutiveNoChanges++;
@@ -490,7 +489,7 @@ serve(async (req) => {
                     source: lastUsedSource
                 };
                 socket.send(JSON.stringify(messageData));
-                console.log("Sent current track info to new client:", JSON.stringify(messageData));
+                console.log("Sent current track info to new client");
             }
         };
 

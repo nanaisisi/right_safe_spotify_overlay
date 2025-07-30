@@ -11,14 +11,12 @@ const ws = new WebSocket(`ws://${location.host}/ws`);
 
 // WebSocket接続時の処理
 ws.onopen = () => {
-  console.log("WebSocket connected");
   updateLoginStatus();
 };
 
 // WebSocketメッセージ受信時の処理
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
-  console.log("Received WebSocket message:", data);
 
   // トラック情報更新
   if (data) {
@@ -27,11 +25,9 @@ ws.onmessage = (event) => {
 
     // ソース判定（メッセージから推測）
     const currentSource = determineSource(data);
-    console.log("Determined source:", currentSource);
 
     // Spotify認証状態は、実際にSpotifyから情報を受信している場合のみtrue
     isAuthenticated = currentSource === "spotify";
-    console.log("Authentication status:", isAuthenticated);
   } else {
     trackName.textContent = "再生中の楽曲なし";
     artistName.textContent = "";
@@ -45,7 +41,6 @@ ws.onmessage = (event) => {
 
 // WebSocket切断時の処理
 ws.onclose = () => {
-  console.log("WebSocket disconnected");
   sourceName.textContent = "接続切断";
   sourceName.className = "source-disconnected";
   updateLoginStatus();
@@ -53,7 +48,6 @@ ws.onclose = () => {
 
 // エラー時の処理
 ws.onerror = (error) => {
-  console.error("WebSocket error:", error);
   sourceName.textContent = "接続エラー";
   sourceName.className = "source-error";
 };
@@ -109,19 +103,12 @@ function setSourceIndicator(source, type) {
     sourceName.textContent = source;
     sourceName.className = `source-${type}`;
     lastSource = source;
-    console.log(`Source changed to: ${source}`);
   }
 }
 
 // ログイン状態の更新
 function updateLoginStatus() {
   const currentSource = sourceName.textContent;
-  console.log(
-    "Updating login status - currentSource:",
-    currentSource,
-    "isAuthenticated:",
-    isAuthenticated
-  );
 
   if (isAuthenticated) {
     loginBtn.style.display = "none";
@@ -139,8 +126,6 @@ function updateLoginStatus() {
       loginStatus.className = "status-unauthenticated";
     }
   }
-  console.log("Login button display:", loginBtn.style.display);
-  console.log("Login status text:", loginStatus.textContent);
 }
 
 // 初期状態の設定
