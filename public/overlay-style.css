@@ -86,6 +86,11 @@ body {
 
 /* スクリーンリーダー専用テキスト */
 .sr-only {
+  display: none !important;
+}
+
+/* より詳細なsr-onlyクラス（予備用） */
+.sr-only-detail {
   position: absolute;
   width: 1px;
   height: 1px;
