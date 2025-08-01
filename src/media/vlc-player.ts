@@ -105,13 +105,16 @@ export class VLCPlayer {
               // "番号 アーティスト - 曲名" パターン
               const potentialArtist = match[1].trim();
               const potentialTitle = match[2].trim();
-              
+
               // アーティスト名らしいかチェック（曲名と同じでないか）
-              if (potentialArtist !== trackName.replace(/\s*-.*$/, '')) {
+              if (potentialArtist !== trackName.replace(/\s*-.*$/, "")) {
                 artistName = potentialArtist;
                 console.log("Extracted artist (pattern 1):", artistName);
               } else {
-                console.log("Potential artist matches track name, skipping:", potentialArtist);
+                console.log(
+                  "Potential artist matches track name, skipping:",
+                  potentialArtist
+                );
               }
             } else if (pattern.source.includes("by")) {
               // "曲名 by アーティスト" パターン
@@ -121,23 +124,39 @@ export class VLCPlayer {
               // 通常のパターン - より短い方をアーティスト名として採用
               const part1 = match[1].trim();
               const part2 = match[2].trim();
-              
+
               // 楽曲名と重複していないかチェック
-              if (part1 !== trackName && part1.length < part2.length && part1.length > 1) {
+              if (
+                part1 !== trackName &&
+                part1.length < part2.length &&
+                part1.length > 1
+              ) {
                 artistName = part1;
                 console.log("Extracted artist (length-based):", artistName);
-              } else if (part2 !== trackName && part2.length < part1.length && part2.length > 1) {
+              } else if (
+                part2 !== trackName &&
+                part2.length < part1.length &&
+                part2.length > 1
+              ) {
                 artistName = part2;
                 console.log("Extracted artist (length-based):", artistName);
               } else {
-                console.log("No suitable artist found in parts:", { part1, part2, trackName });
+                console.log("No suitable artist found in parts:", {
+                  part1,
+                  part2,
+                  trackName,
+                });
               }
             } else if (pattern.source.includes("\\d+\\s+(.+)")) {
               // "番号 曲名" パターン - アーティスト情報なし
               console.log("Number + title pattern, no artist found");
             }
 
-            if (artistName && artistName !== "アーティスト情報なし" && artistName !== trackName) {
+            if (
+              artistName &&
+              artistName !== "アーティスト情報なし" &&
+              artistName !== trackName
+            ) {
               break;
             }
           }
