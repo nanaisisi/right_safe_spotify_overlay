@@ -33,8 +33,8 @@ export class WebSocketManager {
     this.vlcShortInterval = config.vlcShortInterval || 5000;
     this.vlcLongInterval = config.vlcLongInterval || 10000;
 
-    // Start the adaptive polling
-    setTimeout(() => this.checkAndBroadcastTrack(), 1000); // Start after 1 second
+    // Start the adaptive polling - 即座に開始
+    setTimeout(() => this.checkAndBroadcastTrack(), 100); // 100msで開始
   }
 
   handleConnection(socket: WebSocket): void {

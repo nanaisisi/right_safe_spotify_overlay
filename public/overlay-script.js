@@ -35,7 +35,7 @@ class DOMManager {
    * トラック情報を表示
    */
   updateTrackInfo(trackData) {
-    const { trackName, artistName, isPlaying } = trackData;
+    const { trackName, artistName, isPlaying, source } = trackData;
 
     if (!trackName || !artistName) {
       this.showNoTrack();
@@ -44,10 +44,53 @@ class DOMManager {
 
     const playingIndicator = isPlaying ? "♪ " : "⏸ ";
 
+    // 楽曲情報とソース情報を同時に更新
     this.elements.trackName.textContent = playingIndicator + trackName;
     this.elements.artistName.textContent = artistName;
 
+    // ソース情報も同時に更新
+    this.updateSourceInfoFromData(trackData);
+
     this.updateContainerState(isPlaying);
+  }
+
+  /**
+   * trackDataからソース情報を直接更新
+   */
+  updateSourceInfoFromData(data) {
+    let sourceText = "不明";
+    let sourceClass = "source-unknown";
+
+    if (data.source) {
+      if (data.source.includes("Spotify")) {
+        sourceText = "Spotify";
+        sourceClass = "source-spotify";
+      } else if (data.source.includes("VLC")) {
+        sourceText = "VLC";
+        sourceClass = "source-vlc";
+      }
+    } else {
+      // フォールバック判定
+      if (data.trackName && data.artistName) {
+        if (data.trackName.match(/\.(mp3|flac|wav|m4a|aac|ogg)$/i)) {
+          sourceText = "VLC";
+          sourceClass = "source-vlc";
+        } else if (
+          data.artistName === "Unknown Artist" &&
+          data.trackName === "Unknown Track"
+        ) {
+          sourceText = "VLC";
+          sourceClass = "source-vlc";
+        } else {
+          sourceText = "Spotify";
+          sourceClass = "source-spotify";
+        }
+      }
+    }
+
+    console.log("同期更新: ソース情報設定", { sourceText, sourceClass });
+    this.elements.sourceName.textContent = sourceText;
+    this.elements.sourceName.className = sourceClass;
   }
 
   /**
@@ -340,8 +383,8 @@ class SpotifyOverlay {
       return;
     }
 
-    // ソース表示を更新
-    this.updateSourceDisplay(data);
+    // 楽曲情報とソース情報を同時に更新（一度だけDOM操作）
+    this.domManager.updateTrackInfo(data);
 
     // 楽曲変更チェック
     const newTrackId = `${data.trackName}-${data.artistName}`;
@@ -353,77 +396,19 @@ class SpotifyOverlay {
       this.requestSourceAnalysis(data.trackName, data.artistName);
     }
 
-    // DOM更新
-    this.domManager.updateTrackInfo(data);
-
     console.log(`Track updated: ${data.trackName} by ${data.artistName}`);
   }
 
   /**
-   * ソース表示を更新
+   * ソース表示を更新（現在は DOMManager.updateTrackInfo で直接実行）
+   * 互換性のため残しているが、実際の処理は DOMManager で行われる
    */
   updateSourceDisplay(data) {
-    console.log("=== updateSourceDisplay called ===");
-    console.log("Received data.source:", data.source);
-
-    let sourceText = "不明";
-    let sourceClass = "source-unknown";
-    let confidence = null;
-
-    if (data.source) {
-      console.log("data.source is present:", data.source);
-      if (data.source.includes("Spotify")) {
-        sourceText = "Spotify";
-        sourceClass = "source-spotify";
-        console.log("Detected Spotify source");
-      } else if (data.source.includes("VLC")) {
-        sourceText = "VLC";
-        sourceClass = "source-vlc";
-        console.log("Detected VLC source");
-      }
-
-      // 音源分析データから信頼度を取得
-      const analysis = this.sourceAnalyzer.getCurrentAnalysis();
-      if (analysis && analysis.confidence) {
-        confidence = analysis.confidence;
-      }
-    } else {
-      console.log("data.source is missing, using fallback detection");
-      // フォールバック判定
-      if (data.trackName && data.artistName) {
-        if (data.trackName.match(/\.(mp3|flac|wav|m4a|aac|ogg)$/i)) {
-          sourceText = "VLC";
-          sourceClass = "source-vlc";
-          console.log("Fallback: Detected VLC via file extension");
-        } else if (
-          data.artistName === "Unknown Artist" &&
-          data.trackName === "Unknown Track"
-        ) {
-          sourceText = "VLC";
-          sourceClass = "source-vlc";
-          console.log("Fallback: Detected VLC via unknown metadata");
-        } else {
-          sourceText = "Spotify";
-          sourceClass = "source-spotify";
-          console.log("Fallback: Detected Spotify");
-        }
-      }
-    }
-
-    const fullSourceText = sourceText; // 信頼度を除去
-
-    if (this.lastSource !== fullSourceText) {
-      console.log("Updating source display:", {
-        sourceText,
-        sourceClass,
-        fullSourceText,
-      });
-      this.domManager.updateSourceInfo(sourceText, sourceClass);
-      this.lastSource = fullSourceText;
-      console.log("Updated source display:", fullSourceText);
-    } else {
-      console.log("Source display unchanged:", fullSourceText);
-    }
+    // この関数は現在使用されていません
+    // DOM更新は DOMManager.updateTrackInfo で同期実行されます
+    console.log(
+      "updateSourceDisplay called (deprecated - use DOMManager.updateTrackInfo)"
+    );
   }
 
   /**
