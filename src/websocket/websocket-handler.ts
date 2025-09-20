@@ -173,9 +173,16 @@ export class WebSocketManager {
             duration: nowPlaying.duration,
             isInPlaylist: nowPlaying.isInPlaylist,
             source: this.unifiedPlayer.currentSource,
+            // 新しいフィールドを追加
+            contextType: nowPlaying.contextType,
+            contextUri: nowPlaying.contextUri,
+            popularity: nowPlaying.popularity,
+            isLocal: nowPlaying.isLocal,
+            playlistStatus: nowPlaying.playlistStatus,
           }
         : null;
 
+      console.log("Broadcasting track data:", messageData);
       this.broadcastToAllClients(JSON.stringify(messageData));
     } else {
       this.consecutiveNoChanges++;

@@ -41,6 +41,22 @@ export class DOMManager {
    * トラック情報を表示
    */
   updateTrackInfo(trackData) {
+    console.log("=== updateTrackInfo 受信データ詳細 ===");
+    console.log("Raw trackData:", trackData);
+    console.log(
+      "playlistStatus:",
+      trackData.playlistStatus,
+      typeof trackData.playlistStatus
+    );
+    console.log(
+      "popularity:",
+      trackData.popularity,
+      typeof trackData.popularity
+    );
+    console.log("isLocal:", trackData.isLocal, typeof trackData.isLocal);
+    console.log("contextType:", trackData.contextType);
+    console.log("contextUri:", trackData.contextUri);
+
     const {
       trackName,
       artistName,

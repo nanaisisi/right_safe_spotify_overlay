@@ -178,6 +178,12 @@ export class SpotifyPlayer {
     console.log("- Context Type:", data.context?.type);
     console.log("- Playlist Status:", playlistStatus);
     console.log("- Is in Playlist (legacy):", isInPlaylist);
+    console.log(
+      "- Popularity:",
+      data.item.popularity,
+      typeof data.item.popularity
+    );
+    console.log("- Is Local:", data.item.is_local, typeof data.item.is_local);
 
     const trackInfo: TrackInfo = {
       trackName: data.item.name,
@@ -202,6 +208,15 @@ export class SpotifyPlayer {
           : undefined,
       playlistStatus: playlistStatus,
     };
+
+    console.log("Created TrackInfo:", {
+      trackName: trackInfo.trackName,
+      source: trackInfo.source,
+      playlistStatus: trackInfo.playlistStatus,
+      popularity: trackInfo.popularity,
+      isLocal: trackInfo.isLocal,
+      contextType: trackInfo.contextType,
+    });
 
     this.lastTrackInfo = trackInfo;
     return trackInfo;
