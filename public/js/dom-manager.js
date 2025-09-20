@@ -17,6 +17,8 @@ export class DOMManager {
         "playlist-other-indicator"
       ),
       playlistNoneIndicator: document.getElementById("playlist-none-indicator"),
+      popularityIndicator: document.getElementById("popularity-indicator"),
+      localIndicator: document.getElementById("local-indicator"),
     };
 
     this.validateElements();
@@ -49,6 +51,9 @@ export class DOMManager {
       isInPlaylist,
       contextType,
       contextUri,
+      popularity,
+      isLocal,
+      playlistStatus,
     } = trackData;
 
     if (!trackName || !artistName) {
@@ -68,13 +73,30 @@ export class DOMManager {
     // 秒数表示を更新
     this.updateTrackDuration(duration);
 
-    // プレイリスト情報を更新（Spotifyの場合のみ）
-    this.updatePlaylistIndicator(source, isInPlaylist, contextType, contextUri);
+    // プレイリスト情報を更新（新しい判定方式を使用）
+    this.updatePlaylistIndicator(
+      source,
+      playlistStatus,
+      contextType,
+      contextUri
+    );
+
+    // 人気度とローカル再生情報を更新
+    this.updatePopularityIndicator(source, popularity);
+    this.updateLocalIndicator(source, isLocal);
 
     // ソース情報を更新
     this.updateSourceInfo(source);
 
     this.updateContainerState(isPlaying);
+
+    console.log("TrackInfo updated:", {
+      trackName,
+      source,
+      playlistStatus,
+      popularity: typeof popularity,
+      isLocal: typeof isLocal,
+    });
   }
 
   /**
@@ -178,11 +200,11 @@ export class DOMManager {
   }
 
   /**
-   * プレイリストインジケーターを更新
+   * プレイリストインジケーターを更新（実際の含有状況ベース）
    */
   updatePlaylistIndicator(
     source,
-    isInPlaylist,
+    playlistStatus,
     contextType = null,
     contextUri = null
   ) {
@@ -192,37 +214,76 @@ export class DOMManager {
     this.elements.playlistNoneIndicator.style.display = "none";
 
     // Spotify再生の場合のみインジケーターを表示
-    if (source && source.includes("Spotify")) {
-      if (isInPlaylist === true && contextType === "playlist") {
-        // 現在のプレイリストから再生中
+    if (source && source.includes("Spotify") && playlistStatus) {
+      console.log("プレイリスト判定（実際の含有確認）:", {
+        playlistStatus,
+        contextType,
+        contextUri,
+      });
+
+      if (playlistStatus === "current") {
+        // 楽曲が実際にプレイリストに含まれている
         this.elements.playlistInIndicator.style.display = "inline";
-        console.log("現在のプレイリストから再生中:", contextUri);
-      } else if (isInPlaylist === false) {
-        // プレイリスト外から再生中 - コンテキストタイプで詳細判定
-        if (contextType === "album") {
-          // アルバムから再生中 - 他のプレイリストにある可能性
-          this.elements.playlistOtherIndicator.style.display = "inline";
-          console.log("アルバムから再生中（他のプレイリストにある可能性）");
-        } else if (contextType === "artist") {
-          // アーティストから再生中 - 他のプレイリストにある可能性
-          this.elements.playlistOtherIndicator.style.display = "inline";
-          console.log("アーティストから再生中（他のプレイリストにある可能性）");
-        } else if (contextType === "search") {
-          // 検索結果から再生中 - 他のプレイリストにある可能性
-          this.elements.playlistOtherIndicator.style.display = "inline";
-          console.log("検索結果から再生中（他のプレイリストにある可能性）");
+        console.log("✓ 楽曲がプレイリストに実際に含まれています:", contextUri);
+      } else if (playlistStatus === "other") {
+        // アルバム/アーティストから再生中（他のプレイリストにある可能性）
+        this.elements.playlistOtherIndicator.style.display = "inline";
+        console.log(`✓ ${contextType}から再生中（プレイリストにもある可能性）`);
+      } else if (playlistStatus === "none") {
+        // 楽曲がプレイリストに含まれていない、またはミックス/レコメンド再生
+        this.elements.playlistNoneIndicator.style.display = "inline";
+        if (contextType === "playlist") {
+          console.log(
+            "✗ プレイリストコンテキストだが楽曲は実際には含まれていません"
+          );
         } else {
-          // ミックス、レコメンド、ラジオなど - どのプレイリストにもない可能性が高い
-          this.elements.playlistNoneIndicator.style.display = "inline";
-          console.log("ミックス/レコメンド再生中（プレイリスト外の可能性）");
+          console.log(
+            "✓ ミックス/レコメンド/検索などから再生中（プレイリスト外）"
+          );
         }
-      } else {
-        // isInPlaylistが不明な場合は非表示
-        console.log("プレイリスト状態不明のため非表示");
       }
     } else {
-      // VLCなどSpotify以外の場合は非表示
-      console.log("非Spotify再生のためインジケーター非表示");
+      // VLCなどSpotify以外の場合、またはplaylistStatusが未定義の場合は非表示
+      console.log(
+        "非Spotify再生またはplaylistStatus未定義のためインジケーター非表示"
+      );
+    }
+  }
+
+  /**
+   * 人気度インジケーターを更新
+   */
+  updatePopularityIndicator(source, popularity) {
+    if (
+      source &&
+      source.includes("Spotify") &&
+      typeof popularity === "number" &&
+      popularity >= 0
+    ) {
+      this.elements.popularityIndicator.textContent = `人気度: ${popularity}`;
+      this.elements.popularityIndicator.style.display = "inline";
+      console.log("人気度表示:", popularity);
+    } else {
+      this.elements.popularityIndicator.style.display = "none";
+      if (source && source.includes("Spotify")) {
+        console.log("人気度データなし:", typeof popularity, popularity);
+      }
+    }
+  }
+
+  /**
+   * ローカル再生インジケーターを更新
+   */
+  updateLocalIndicator(source, isLocal) {
+    if (source && source.includes("Spotify") && typeof isLocal === "boolean") {
+      this.elements.localIndicator.textContent = isLocal ? "ローカル" : "";
+      this.elements.localIndicator.style.display = isLocal ? "inline" : "none";
+      console.log("ローカル再生:", isLocal ? "あり" : "なし");
+    } else {
+      this.elements.localIndicator.style.display = "none";
+      if (source && source.includes("Spotify")) {
+        console.log("ローカル再生データなし:", typeof isLocal, isLocal);
+      }
     }
   }
 
@@ -285,6 +346,8 @@ export class DOMManager {
     this.elements.playlistInIndicator.style.display = "none";
     this.elements.playlistOtherIndicator.style.display = "none";
     this.elements.playlistNoneIndicator.style.display = "none";
+    this.elements.popularityIndicator.style.display = "none";
+    this.elements.localIndicator.style.display = "none";
 
     this.elements.container.classList.add("no-track");
     this.elements.container.classList.remove("playing", "paused");
