@@ -1,6 +1,9 @@
 # Environment variables and configuration
 config.toml
 
+# Spotify authentication tokens
+spotify_tokens.json
+
 # Logs
 *.log
 
