@@ -22,17 +22,30 @@
               >音源取得中...</span
             >
             <span id="current-time" class="current-time">0:00</span>
-            <span id="track-duration" class="track-duration">/ 0:00</span>
+            <span class="time-separator">/</span>
+            <span id="track-duration" class="track-duration">0:00</span>
             <span
-              id="playlist-indicator"
-              class="playlist-indicator"
+              id="playlist-in-indicator"
+              class="playlist-in-indicator"
               style="display: none"
-              >プレイリスト</span
+              >プレイリストにある</span
+            >
+            <span
+              id="playlist-other-indicator"
+              class="playlist-other-indicator"
+              style="display: none"
+              >他のプレイリストにある</span
+            >
+            <span
+              id="playlist-none-indicator"
+              class="playlist-none-indicator"
+              style="display: none"
+              >どのプレイリストにもない</span
             >
           </div>
         </div>
       </section>
     </main>
-    <script src="overlay-script.js" type="module"></script>
+    <script src="js/main.js" type="module"></script>
   </body>
 </html>

@@ -9,6 +9,8 @@ export interface TrackInfo {
   duration: number; // 秒数表示用
   isInPlaylist: boolean; // プレイリスト情報用
   source: string; // 音源情報
+  contextType?: string; // 再生コンテキストタイプ (playlist, album, artist, etc.)
+  contextUri?: string; // 再生コンテキストURI
 }
 
 export class SpotifyPlayer {
@@ -102,6 +104,8 @@ export class SpotifyPlayer {
       duration: Math.floor(data.item.duration_ms / 1000), // ミリ秒から秒に変換
       isInPlaylist: isInPlaylist,
       source: "Spotify",
+      contextType: data.context?.type || null,
+      contextUri: data.context?.uri || null,
     };
 
     this.lastTrackInfo = trackInfo;

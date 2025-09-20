@@ -182,7 +182,11 @@ export class VLCPlayer {
     } catch (error) {
       // エラーログを静かに - 接続エラーは頻繁に発生する可能性がある
       // 初回接続エラーのみログに記録
-      if (!this.lastTrackInfo && error.message.includes("connection")) {
+      if (
+        !this.lastTrackInfo &&
+        error instanceof Error &&
+        error.message.includes("connection")
+      ) {
         console.error(
           "✗ VLC connection failed. Please ensure VLC is running with HTTP interface enabled."
         );
@@ -256,7 +260,9 @@ export class VLCPlayer {
         }
       }
     } catch (error) {
-      debugInfo += `\nConnection Error:\n${error.message}\n`;
+      debugInfo += `\nConnection Error:\n${
+        error instanceof Error ? error.message : String(error)
+      }\n`;
     }
 
     return debugInfo;
@@ -288,7 +294,7 @@ export class VLCPlayer {
       };
     } catch (error) {
       return {
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         config: {
           vlcEnabled: this.config.vlcEnabled,
           vlcHost: this.config.vlcHost,

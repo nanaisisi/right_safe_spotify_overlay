@@ -76,7 +76,13 @@ Spotify または VLC Media Player で現在再生中の楽曲を表示する We
 
 VLC を以下のコマンドで起動することもできます：
 
-```bash
+というよりもうちょっと単純でいい
+
+```
+vlc --http-password 'vlc'
+```
+
+```
 vlc --intf http --http-password vlc --http-port 8080
 ```
 

@@ -200,29 +200,46 @@ body {
   text-align: center;
 }
 
-.track-duration {
-  color: var(--color-text);
-  background: rgba(255, 255, 255, 0.15);
-}
-
-/* スラッシュのスタイル */
-.track-meta::before {
-  content: "/";
+/* スラッシュのスタイル - 独立させて見やすく */
+.time-separator {
   color: var(--color-text-muted);
   font-weight: var(--font-weight-normal);
-  margin: 0 var(--spacing-xs);
-  position: relative;
-  top: 1px;
+  margin: 0 var(--spacing-sm);
+  opacity: 0.7;
 }
 
-.playlist-indicator {
+/* プレイリスト状態インジケーター */
+.playlist-in-indicator {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-primary);
   background: rgba(29, 185, 84, 0.2);
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-sm);
-  margin-left: var(--spacing-xs);
+  margin-left: var(--spacing-sm);
+  border: 1px solid rgba(29, 185, 84, 0.4);
+}
+
+.playlist-other-indicator {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.2);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  margin-left: var(--spacing-sm);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.playlist-none-indicator {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.2);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  margin-left: var(--spacing-sm);
+  border: 1px solid rgba(245, 158, 11, 0.4);
 }
 
 .playlist-indicator:hover {
