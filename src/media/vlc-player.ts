@@ -172,6 +172,9 @@ export class VLCPlayer {
         isPlaying: data.state === "playing",
         progressMs: Math.floor((data.time || 0) * 1000),
         durationMs: Math.floor((data.length || 0) * 1000),
+        duration: Math.floor(data.length || 0), // VLCのlengthは秒単位
+        isInPlaylist: false, // VLCではプレイリスト情報を取得できない
+        source: "VLC",
       };
 
       this.lastTrackInfo = trackInfo;

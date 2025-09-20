@@ -165,7 +165,13 @@ export class WebSocketManager {
       // 音源情報を含めてブロードキャスト
       const messageData = nowPlaying
         ? {
-            ...nowPlaying,
+            trackName: nowPlaying.trackName,
+            artistName: nowPlaying.artistName,
+            isPlaying: nowPlaying.isPlaying,
+            progressMs: nowPlaying.progressMs,
+            durationMs: nowPlaying.durationMs,
+            duration: nowPlaying.duration,
+            isInPlaylist: nowPlaying.isInPlaylist,
             source: this.unifiedPlayer.currentSource,
           }
         : null;

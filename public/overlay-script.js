@@ -13,6 +13,9 @@ class DOMManager {
       trackName: document.getElementById("track-name"),
       artistName: document.getElementById("artist-name"),
       sourceName: document.getElementById("source-name"),
+      currentTime: document.getElementById("current-time"),
+      trackDuration: document.getElementById("track-duration"),
+      playlistIndicator: document.getElementById("playlist-indicator"),
     };
 
     this.validateElements();
@@ -35,7 +38,15 @@ class DOMManager {
    * トラック情報を表示
    */
   updateTrackInfo(trackData) {
-    const { trackName, artistName, isPlaying, source } = trackData;
+    const {
+      trackName,
+      artistName,
+      isPlaying,
+      source,
+      duration,
+      progressMs,
+      isInPlaylist,
+    } = trackData;
 
     if (!trackName || !artistName) {
       this.showNoTrack();
@@ -48,8 +59,17 @@ class DOMManager {
     this.elements.trackName.textContent = playingIndicator + trackName;
     this.elements.artistName.textContent = artistName;
 
-    // ソース情報も同時に更新
-    this.updateSourceInfoFromData(trackData);
+    // 現在の再生時間を更新
+    this.updateCurrentTime(progressMs);
+
+    // 秒数表示を更新
+    this.updateTrackDuration(duration);
+
+    // プレイリスト情報を更新（Spotifyの場合のみ）
+    this.updatePlaylistIndicator(source, isInPlaylist);
+
+    // ソース情報を更新
+    this.updateSourceInfo(source);
 
     this.updateContainerState(isPlaying);
   }
@@ -58,67 +78,135 @@ class DOMManager {
    * trackDataからソース情報を直接更新
    */
   updateSourceInfoFromData(data) {
+    console.log("=== updateSourceInfoFromData 詳細デバッグ ===");
+    console.log("受信データ:", data);
+    console.log("data.source:", data.source);
+    console.log("data.trackName:", data.trackName);
+    console.log("data.artistName:", data.artistName);
+
     let sourceText = "不明";
     let sourceClass = "source-unknown";
 
     if (data.source) {
+      console.log("data.sourceが存在します:", data.source);
       if (data.source.includes("Spotify")) {
         sourceText = "Spotify";
         sourceClass = "source-spotify";
+        console.log("→ Spotify判定");
       } else if (data.source.includes("VLC")) {
         sourceText = "VLC";
         sourceClass = "source-vlc";
+        console.log("→ VLC判定");
+      } else {
+        console.log("→ 不明なソース:", data.source);
       }
     } else {
+      console.log("data.sourceが未定義、フォールバック判定を実行");
       // フォールバック判定
       if (data.trackName && data.artistName) {
         if (data.trackName.match(/\.(mp3|flac|wav|m4a|aac|ogg)$/i)) {
           sourceText = "VLC";
           sourceClass = "source-vlc";
+          console.log("→ ファイル拡張子によりVLC判定");
         } else if (
           data.artistName === "Unknown Artist" &&
           data.trackName === "Unknown Track"
         ) {
           sourceText = "VLC";
           sourceClass = "source-vlc";
+          console.log("→ Unknown Artist/TrackによりVLC判定");
         } else {
           sourceText = "Spotify";
           sourceClass = "source-spotify";
+          console.log("→ デフォルトでSpotify判定");
         }
       }
     }
 
-    console.log("同期更新: ソース情報設定", { sourceText, sourceClass });
+    console.log("最終判定結果:", { sourceText, sourceClass });
+    console.log(
+      "DOM更新前 - 現在の表示:",
+      this.elements.sourceName.textContent
+    );
+
     this.elements.sourceName.textContent = sourceText;
     this.elements.sourceName.className = sourceClass;
+
+    console.log(
+      "DOM更新後 - 新しい表示:",
+      this.elements.sourceName.textContent
+    );
+    console.log("=== updateSourceInfoFromData 完了 ===");
   }
 
   /**
-   * ソース情報を更新
+   * 現在の再生時間を更新
    */
-  updateSourceInfo(sourceText, sourceClass, confidence = null) {
-    console.log("=== updateSourceInfo called ===");
-    console.log("sourceText:", sourceText);
-    console.log("sourceClass:", sourceClass);
-    console.log("confidence:", confidence);
+  updateCurrentTime(progressMs) {
+    if (progressMs && typeof progressMs === "number") {
+      const currentSeconds = Math.floor(progressMs / 1000);
+      const minutes = Math.floor(currentSeconds / 60);
+      const seconds = currentSeconds % 60;
+      const formattedTime = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+      this.elements.currentTime.textContent = formattedTime;
+      console.log("現在の再生時間更新:", formattedTime);
+    } else {
+      this.elements.currentTime.textContent = "0:00";
+      console.log("現在の再生時間リセット");
+    }
+  }
 
-    const displayText = sourceText; // 信頼度は表示せず、シンプルにソース名のみ表示
+  /**
+   * トラックの秒数表示を更新
+   */
+  updateTrackDuration(duration) {
+    if (duration && typeof duration === "number") {
+      const minutes = Math.floor(duration / 60);
+      const seconds = Math.floor(duration % 60);
+      const formattedDuration = `${minutes}:${seconds
+        .toString()
+        .padStart(2, "0")}`;
+      this.elements.trackDuration.textContent = `/ ${formattedDuration}`;
+      console.log("総時間更新:", formattedDuration);
+    } else {
+      this.elements.trackDuration.textContent = "/ 0:00";
+      console.log("総時間リセット");
+    }
+  }
 
-    console.log("Setting sourceName textContent to:", displayText);
-    console.log("Setting sourceName className to:", sourceClass);
+  /**
+   * プレイリストインジケーターを更新
+   */
+  updatePlaylistIndicator(source, isInPlaylist) {
+    if (source && source.includes("Spotify") && isInPlaylist === true) {
+      this.elements.playlistIndicator.style.display = "inline";
+      console.log("プレイリストインジケーター表示");
+    } else {
+      this.elements.playlistIndicator.style.display = "none";
+      console.log("プレイリストインジケーター非表示");
+    }
+  }
 
-    this.elements.sourceName.textContent = displayText;
+  /**
+   * ソース情報を更新（シンプル版）
+   */
+  updateSourceInfo(source) {
+    let sourceText = "不明";
+    let sourceClass = "source-unknown";
+
+    if (source) {
+      if (source.includes("Spotify")) {
+        sourceText = "Spotify";
+        sourceClass = "source-spotify";
+      } else if (source.includes("VLC")) {
+        sourceText = "VLC";
+        sourceClass = "source-vlc";
+      }
+    }
+
+    console.log("ソース情報更新:", { sourceText, sourceClass });
+    this.elements.sourceName.textContent = sourceText;
     this.elements.sourceName.className = sourceClass;
-
-    // 確認のため、実際に設定された値をログ出力
-    console.log(
-      "Actual sourceName textContent:",
-      this.elements.sourceName.textContent
-    );
-    console.log(
-      "Actual sourceName className:",
-      this.elements.sourceName.className
-    );
   }
 
   /**
@@ -129,6 +217,9 @@ class DOMManager {
     this.elements.artistName.textContent = "音楽を再生してください";
     this.elements.sourceName.textContent = "未接続";
     this.elements.sourceName.className = "source-disconnected";
+    this.elements.currentTime.textContent = "0:00";
+    this.elements.trackDuration.textContent = "/ 0:00";
+    this.elements.playlistIndicator.style.display = "none";
     this.elements.container.classList.add("no-track");
   }
 
@@ -347,6 +438,10 @@ class SpotifyOverlay {
     this.sourceAnalyzer = new SourceAnalyzer();
     this.currentTrack = null;
     this.lastSource = "";
+    this.currentProgressMs = 0;
+    this.currentDuration = 0;
+    this.isPlaying = false;
+    this.updateTimer = null;
 
     // WebSocket接続を初期化
     this.wsClient = new WebSocketClient("ws://127.0.0.1:8081/ws", this);
@@ -383,8 +478,16 @@ class SpotifyOverlay {
       return;
     }
 
+    // 現在の再生状態を保存
+    this.currentProgressMs = data.progressMs || 0;
+    this.currentDuration = data.duration || 0;
+    this.isPlaying = data.isPlaying || false;
+
     // 楽曲情報とソース情報を同時に更新（一度だけDOM操作）
     this.domManager.updateTrackInfo(data);
+
+    // タイマーを開始/停止
+    this.updatePlaybackTimer();
 
     // 楽曲変更チェック
     const newTrackId = `${data.trackName}-${data.artistName}`;
@@ -397,6 +500,56 @@ class SpotifyOverlay {
     }
 
     console.log(`Track updated: ${data.trackName} by ${data.artistName}`);
+  }
+
+  /**
+   * 再生タイマーを開始/停止
+   */
+  updatePlaybackTimer() {
+    // 既存のタイマーをクリア
+    if (this.updateTimer) {
+      clearInterval(this.updateTimer);
+      this.updateTimer = null;
+    }
+
+    // 再生中の場合のみタイマーを開始
+    if (this.isPlaying && this.currentDuration > 0) {
+      this.updateTimer = setInterval(() => {
+        this.currentProgressMs += 1000; // 1秒進める
+
+        // 楽曲の終わりを超えないようにする
+        if (this.currentProgressMs > this.currentDuration * 1000) {
+          this.currentProgressMs = this.currentDuration * 1000;
+          this.isPlaying = false;
+          this.updatePlaybackTimer(); // タイマーを停止
+        }
+
+        // 現在の再生時間を更新
+        this.updateCurrentTime(this.currentProgressMs);
+      }, 1000); // 1秒ごとに更新
+    }
+  }
+
+  /**
+   * 現在の再生時間を更新
+   */
+  updateCurrentTime(progressMs) {
+    if (progressMs && typeof progressMs === 'number') {
+      const currentSeconds = Math.floor(progressMs / 1000);
+      const minutes = Math.floor(currentSeconds / 60);
+      const seconds = currentSeconds % 60;
+      const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      this.domManager.elements.currentTime.textContent = formattedTime;
+      console.log("現在の再生時間更新:", formattedTime);
+    } else {
+      this.domManager.elements.currentTime.textContent = "0:00";
+      console.log("現在の再生時間リセット");
+    }
+  }
+
+  /**
+   * トラック情報を更新
+   */
   }
 
   /**
@@ -415,13 +568,22 @@ class SpotifyOverlay {
    * 音源分析結果を処理
    */
   handleSourceAnalysisResult(data) {
-    const analysisResult = this.sourceAnalyzer.handleAnalysisResult(data);
+    console.log("=== 音源分析結果受信（一時的に無効化） ===");
+    console.log("分析対象:", data.trackName, "by", data.artistName);
+    console.log("分析結果:", data.analysis);
 
-    // 現在表示中の楽曲と一致する場合、表示を更新
+    // 一時的に分析結果による上書きを無効化
+    console.log("現在は分析結果による上書きを無効化中です");
+    console.log("初期判定結果を維持します");
+
+    const analysisResult = this.sourceAnalyzer.handleAnalysisResult(data);
+    return; // 早期リターンで上書きを防ぐ
+
+    // 以下は無効化されているコード
     if (this.currentTrack === `${data.trackName}-${data.artistName}`) {
       console.log("Analysis matches current track, updating display");
 
-      const fullSourceText = analysisResult.sourceText; // 信頼度を除去
+      const fullSourceText = analysisResult.sourceText;
 
       if (this.lastSource !== fullSourceText) {
         this.domManager.updateSourceInfo(
@@ -458,9 +620,18 @@ class SpotifyOverlay {
    * トラック無し状態を処理
    */
   handleNoTrack() {
+    // タイマーをクリア
+    if (this.updateTimer) {
+      clearInterval(this.updateTimer);
+      this.updateTimer = null;
+    }
+
     this.domManager.showNoTrack();
     this.currentTrack = null;
     this.lastSource = "";
+    this.currentProgressMs = 0;
+    this.currentDuration = 0;
+    this.isPlaying = false;
   }
 
   /**

@@ -154,6 +154,81 @@ body {
   gap: var(--spacing-sm);
 }
 
+.track-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.source-info {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.1);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  min-width: 4rem;
+  text-align: center;
+}
+
+.source-spotify {
+  background: rgba(29, 185, 84, 0.2);
+  color: var(--color-primary);
+}
+
+.source-vlc {
+  background: rgba(255, 136, 0, 0.2);
+  color: #ff8800;
+}
+
+.source-disconnected {
+  background: rgba(227, 34, 52, 0.2);
+  color: var(--color-error);
+}
+
+.current-time,
+.track-duration {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.1);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  min-width: 3rem;
+  text-align: center;
+}
+
+.track-duration {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* スラッシュのスタイル */
+.track-meta::before {
+  content: "/";
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-normal);
+  margin: 0 var(--spacing-xs);
+  position: relative;
+  top: 1px;
+}
+
+.playlist-indicator {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+  background: rgba(29, 185, 84, 0.2);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  margin-left: var(--spacing-xs);
+}
+
+.playlist-indicator:hover {
+  opacity: 1;
+}
+
 .track-title,
 .artist-name {
   margin: 0;
